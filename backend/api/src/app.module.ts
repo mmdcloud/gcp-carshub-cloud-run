@@ -11,16 +11,12 @@ import { ExtraServicesModule } from './extra-services/extra-services.module';
 import { BuyersModule } from './buyers/buyers.module';
 import { databaseProviders } from './database.providers';
 import { DashboardModule } from './dashboard/dashboard.module';
-import { ServeStaticModule } from '@nestjs/serve-static';
-import { join } from 'path';
 import { ConfigModule } from '@nestjs/config';
 
 @Module({
   imports: [
     ConfigModule.forRoot(),
-    ServeStaticModule.forRoot({
-    rootPath: join(__dirname, '..', 'static'),
-  }), VehicleModelsModule, BrandsModule, InventoryModule, OrdersModule, UsersModule, VehicleOwnersModule, ExtraServicesModule, BuyersModule, DashboardModule],
+    VehicleModelsModule, BrandsModule, InventoryModule, OrdersModule, UsersModule, VehicleOwnersModule, ExtraServicesModule, BuyersModule, DashboardModule],
   controllers: [AppController],
   providers: [AppService, ...databaseProviders],
 })

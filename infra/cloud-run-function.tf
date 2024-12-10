@@ -1,4 +1,4 @@
-# data "google_storage_project_service_account" "carshub_gcs_account" {}
+# data "google_storage_project_service_account" "carshub_gcs_account" {} 
 
 # resource "google_project_iam_member" "carshub_gcs_account_pubsub_publishing" {
 #   project = "our-mediator-443812-i8"
@@ -37,7 +37,7 @@
 #     google_project_iam_member.event_receiving_permission,
 #     google_project_iam_member.artifactregistry_reader_permission,
 #   ]
-  
+
 #   name        = "carshub-media-function"
 #   location    = "us-central1"
 #   description = "A function to update media details in SQL database after the upload trigger"

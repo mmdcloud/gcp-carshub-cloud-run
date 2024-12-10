@@ -1,10 +1,11 @@
 #!/bin/bash
 mkdir frontend-code
-cp -r ../backend/api/* frontend-code/
+cp -r ../frontend/* frontend-code/
 cd frontend-code
 
 cat > .env << EOL
-CORS_URL=$1
+BASE_URL=$1
+CLOUDFRONT_DISTRIBUTION_URL=""
 EOL
 
 docker buildx build --tag carshub-frontend --file ./Dockerfile .

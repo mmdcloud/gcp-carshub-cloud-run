@@ -1,15 +1,15 @@
 resource "google_storage_bucket" "carshub_media_bucket" {
   name                        = "carshub-media"
-  location                    = "us-central1"
-  force_destroy = true
+  location                    = var.location
+  force_destroy               = true
   uniform_bucket_level_access = true
 }
 
 resource "google_storage_bucket" "carshub_media_code_bucket" {
   name                        = "carshub-media-code"
-  location                    = "us-central1"
+  location                    = var.location
   uniform_bucket_level_access = true
-  force_destroy = true
+  force_destroy               = true
 }
 
 resource "google_storage_bucket_object" "carshub_media_code_object" {

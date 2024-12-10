@@ -1,6 +1,10 @@
+locals {
+  port = 3000
+}
+
 resource "google_cloud_run_v2_service" "carshub_backend_service" {
   name                = "carshub-backend-service"
-  location            = "us-central1"
+  location            = var.location
   deletion_protection = false
   ingress             = "INGRESS_TRAFFIC_ALL"
 
@@ -17,17 +21,21 @@ resource "google_cloud_run_v2_service" "carshub_backend_service" {
     }
 
     containers {
-      image = "us-central1-docker.pkg.dev/our-mediator-443812-i8/carshub-backend/carshub-backend:latest"
+      image = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-backend/carshub-backend:latest"
       ports {
-        container_port = 3000
+        container_port = local.port
         # name           = "carshub-backend"
       }
       env {
-        name  = "USERNAME"
-        value = "root"
+        name  = "DB_PATH"
+        value = google_sql_database_instance.carshub_db_instance.first_ip_address
       }
       env {
-        name = "PASSWORD"
+        name  = "UN"
+        value = "mohit"
+      }
+      env {
+        name = "CREDS"
         value_source {
           secret_key_ref {
             secret  = google_secret_manager_secret.carshub_db_password_secret.secret_id
@@ -49,9 +57,23 @@ resource "google_cloud_run_v2_service" "carshub_backend_service" {
   depends_on = [google_secret_manager_secret_version.carshub_db_secret_version_data, null_resource.push_backend_artifact]
 }
 
+data "google_iam_policy" "carshub_backend_run_policy" {
+  binding {
+    role = "roles/run.invoker"
+    members = [
+      "allUsers",
+    ]
+  }
+}
+
+resource "google_cloud_run_v2_service_iam_policy" "carshub_backend_run_iam_policy" {
+  name        = google_cloud_run_v2_service.carshub_backend_service.name
+  policy_data = data.google_iam_policy.carshub_backend_run_policy.policy_data
+}
+
 resource "google_cloud_run_v2_service" "carshub_frontend_service" {
   name                = "carshub-frontend-service"
-  location            = "us-central1"
+  location            = var.location
   deletion_protection = false
   ingress             = "INGRESS_TRAFFIC_ALL"
 
@@ -61,12 +83,17 @@ resource "google_cloud_run_v2_service" "carshub_frontend_service" {
     }
 
     containers {
-      image = "us-central1-docker.pkg.dev/our-mediator-443812-i8/carshub-backend/carshub-backend:latest"
+      image = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-frontend/carshub-frontend:latest"
       ports {
-        container_port = 3000
+        container_port = local.port
         # name           = "carshub-frontend"
       }
+      env {
+        name  = "BASE_URL"
+        value = google_cloud_run_v2_service.carshub_backend_service.uri
+      }
     }
+
   }
 
   traffic {
@@ -75,4 +102,18 @@ resource "google_cloud_run_v2_service" "carshub_frontend_service" {
   }
 
   depends_on = [null_resource.push_frontend_artifact]
+}
+
+data "google_iam_policy" "carshub_frontend_run_policy" {
+  binding {
+    role = "roles/run.invoker"
+    members = [
+      "allUsers",
+    ]
+  }
+}
+
+resource "google_cloud_run_v2_service_iam_policy" "carshub_frontend_run_iam_policy" {
+  name        = google_cloud_run_v2_service.carshub_frontend_service.name
+  policy_data = data.google_iam_policy.carshub_frontend_run_policy.policy_data
 }
