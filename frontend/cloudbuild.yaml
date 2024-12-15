@@ -1,7 +1,7 @@
 steps:
   # Step 1: Set up Docker image build and push to Google Artifact Registry (GCR)
   - name: "gcr.io/cloud-builders/docker"
-    args: ["build", "-t", "us-central1-docker.pkg.dev/our-mediator-443812-i8/carshub-frontend/carshub-frontend:$COMMIT_SHA", "."]
+    args: ["build", "-t", "us-central1-docker.pkg.dev/our-mediator-443812-i8/carshub-frontend/carshub-frontend:$COMMIT_SHA", "frontend/."]
 
   # Step 2: Push the image to Google Artifact Registry
   - name: "gcr.io/cloud-builders/docker"
