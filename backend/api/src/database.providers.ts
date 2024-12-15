@@ -19,7 +19,7 @@ export const databaseProviders = [
                 port: 3306,
                 username: process.env.UN,
                 password: process.env.CREDS,
-                dialectOptions: {                    
+                dialectOptions: {
                     socketPath: "/cloudsql/our-mediator-443812-i8:us-central1:carshub-db-instance"
                 },
                 database: 'carshub',
