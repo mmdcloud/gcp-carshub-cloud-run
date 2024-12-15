@@ -9,7 +9,7 @@ resource "google_cloudbuild_trigger" "carshub-frontend-cloudbuild-trigger" {
     }
   }
   ignored_files   = [".gitignore"]
-  service_account = "projects/our-mediator-443812-i8/serviceAccounts/140735220076@cloudbuild.gserviceaccount.com"
+  service_account = "projects/our-mediator-443812-i8/serviceAccounts/carshub-service-account@our-mediator-443812-i8.iam.gserviceaccount.com"
   filename        = "frontend/cloudbuild.yaml"
 }
 
