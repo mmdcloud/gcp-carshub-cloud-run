@@ -24,3 +24,6 @@ steps:
 
 images:
   - "us-west1-docker.pkg.dev/our-mediator-443812-i8/carshub-frontend/carshub-frontend:$COMMIT_SHA"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
