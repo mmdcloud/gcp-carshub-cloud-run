@@ -26,12 +26,16 @@ module "carshub_media_bucket" {
   source   = "./modules/gcs"
   location = var.location
   name     = "carshub-media"
+  force_destroy = true
+  uniform_bucket_level_access = true
 }
 
 module "carshub_media_bucket_code" {
   source   = "./modules/gcs"
   location = var.location
   name     = "carshub-media-code"
+  force_destroy = true
+  uniform_bucket_level_access = true
 }
 
 module "carshub_media_bucket_code_object" {
