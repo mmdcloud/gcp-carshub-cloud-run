@@ -8,6 +8,6 @@ terraform {
 }
 
 provider "google" {
-  project = "our-mediator-443812-i8"
+  project = "nodal-talon-445602-m1"
   region  = var.location
 }

@@ -19,12 +19,6 @@ resource "google_cloud_run_v2_service" "cloud_run_service" {
         cloud_sql_instance {
           instances = volumes.value["cloud_sql_instance"] 
         }
-        # dynamic "cloud_sql_instance" {
-        #   for_each = volumes.value["cloud_sql_instance"]
-        #   content {
-        #     instances = volumes.value["cloud_sql_instance"].value
-        #   }
-        # }
       }
     }
     containers {

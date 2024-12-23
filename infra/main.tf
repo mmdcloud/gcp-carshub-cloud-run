@@ -23,18 +23,18 @@ module "carshub_backend_artifact_registry" {
 
 # GCS
 module "carshub_media_bucket" {
-  source   = "./modules/gcs"
-  location = var.location
-  name     = "carshub-media"
-  force_destroy = true
+  source                      = "./modules/gcs"
+  location                    = var.location
+  name                        = "carshub-media"
+  force_destroy               = true
   uniform_bucket_level_access = true
 }
 
 module "carshub_media_bucket_code" {
-  source   = "./modules/gcs"
-  location = var.location
-  name     = "carshub-media-code"
-  force_destroy = true
+  source                      = "./modules/gcs"
+  location                    = var.location
+  name                        = "carshub-media-code"
+  force_destroy               = true
   uniform_bucket_level_access = true
 }
 
@@ -180,6 +180,7 @@ module "carshub_service_account" {
   display_name = "CarsHub Service Account"
 }
 
+# Service Account Permissions
 module "carshub_gcs_account_pubsub_publishing" {
   source  = "./modules/service-account-iam"
   project = data.google_project.project.project_id
@@ -206,7 +207,7 @@ module "event_receiving_permission" {
 module "cloud_sql_access_permission" {
   source  = "./modules/service-account-iam"
   project = data.google_project.project.project_id
-  role    = "roles/cloudsql.admin"
+  role    = "roles/cloudsql.client"
   member  = "serviceAccount:${module.carshub_service_account.sa_email}"
 }
 
