@@ -238,6 +238,7 @@ module "carshub_media_update_function" {
     DB_USER                  = module.carshub_db.db_user
     DB_NAME                  = module.carshub_db.db_name
     DB_PASSWORD              = module.carshub_sql_password_secret.secret_data
+    DB_PATH                  = module.carshub_db.db_ip_address
   }
   all_traffic_on_latest_revision = true
   ingress_settings               = "ALLOW_ALL"

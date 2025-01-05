@@ -8,6 +8,6 @@ terraform {
 }
 
 provider "google" {
-  project = "nodal-talon-445602-m1"
+  project = var.project_id
   region  = var.location
 }
