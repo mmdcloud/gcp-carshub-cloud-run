@@ -18,6 +18,7 @@ resource "google_compute_url_map" "url_map" {
   }
 }
 
+
 # GCP target proxy
 resource "google_compute_target_http_proxy" "target_http_proxy" {
   name    = var.target_proxy_name

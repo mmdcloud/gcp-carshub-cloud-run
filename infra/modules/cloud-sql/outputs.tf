@@ -7,7 +7,7 @@ output "db_password" {
 }
 
 output "db_ip_address" {
-  value = google_sql_database_instance.db_instance.first_ip_address
+  value = google_sql_database_instance.db_instance.private_ip_address
 }
 
 output "db_name" {

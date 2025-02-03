@@ -4,6 +4,8 @@ variable "deletion_protection" {}
 variable "ingress" {}
 variable "max_instance_count" {}
 variable "traffic_type" {}
+variable "vpc_connector_name" {}
+variable "service_account" {}
 variable "traffic_type_percent" {}
 variable "env" {
   type = list(object({

@@ -17,6 +17,8 @@ resource "google_cloudfunctions2_function" "carshub_media_function" {
     }
   }
   service_config {
+    vpc_connector = var.vpc_connector
+    vpc_connector_egress_settings = var.vpc_connector_egress_settings
     max_instance_count             = var.max_instance_count
     min_instance_count             = var.min_instance_count
     available_memory               = var.available_memory

@@ -13,6 +13,8 @@ variable "max_instance_count" {}
 variable "min_instance_count" {}
 variable "available_memory" {}
 variable "timeout_seconds" {}
+variable "vpc_connector" {}
+variable "vpc_connector_egress_settings" {}
 variable "storage_source" {
   type = list(object({
     bucket =  string

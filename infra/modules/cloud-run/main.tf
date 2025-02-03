@@ -7,8 +7,9 @@ resource "google_cloud_run_v2_service" "cloud_run_service" {
   location            = var.location
   deletion_protection = var.deletion_protection
   ingress             = var.ingress
-
+  
   template {
+    service_account = var.service_account
     scaling {
       max_instance_count = var.max_instance_count
     }
@@ -21,11 +22,15 @@ resource "google_cloud_run_v2_service" "cloud_run_service" {
         }
       }
     }
+    vpc_access{
+      connector = var.vpc_connector_name
+      egress = "ALL_TRAFFIC"
+    }
     containers {
       image = var.image
       ports {
         container_port = local.port
-      }
+      }      
       dynamic "volume_mounts" {
         for_each = var.volume_mounts
         content {

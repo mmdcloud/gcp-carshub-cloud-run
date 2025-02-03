@@ -6,6 +6,7 @@ import { InventoryDetailsDto } from './dto/inventory-details.dto';
 import { S3Client } from "@aws-sdk/client-s3";
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { GetSignedUrlConfig, GetSignedUrlResponse, Storage } from '@google-cloud/storage';
 
 const AWS = require('aws-sdk');
 const s3 = new AWS.S3({ signatureVersion: 'v4', });
@@ -21,31 +22,26 @@ export class InventoryService {
     private inventoryImagesRepository: typeof InventoryImage
   ) { }
 
-  async getSignedUrl(payload): Promise<object> {
-    const myBucket = 'theplayer007-vehicle-images';
-    const signedUrlExpireSeconds = 60 * 50;
-    const myKey = payload.file;
-    var metadata = {
-      "typeofdocument": payload.type,
-      "descriptionofdocument": payload.description,
-      "inventoryid": payload.inventoryId
-    };
-    var url = await s3.getSignedUrlPromise('putObject', {
-      Bucket: myBucket,
-      Key: myKey,
-      Expires: 3000,
-      Metadata: metadata
-    });
-    // console.log(url);
-    // return url;
-    // let command = new PutObjectCommand({ Bucket: myBucket, Key: myKey, Metadata: metadata });
-    // const url = await getSignedUrl(s3Client, command, { expiresIn: signedUrlExpireSeconds, unsignableHeaders: new Set(["x-amz-meta-*"]), unhoistableHeaders: new Set(["x-amz-meta-*"]) });
-    // console.log(url);
-    const response = {
-      statusCode: 200,
-      body: url,
-    };
-    return response;
+  async getSignedUrl(payload): Promise<string> {
+    const storage = new Storage();
+    const bucket = storage.bucket("carshub-media");
+    const file = bucket.file(payload.file);    
+    var options : GetSignedUrlConfig = {
+      action: 'write',
+      version:"v4",
+      expires: Date.now() + 3600 * 1000,
+      contentType: payload.mime_type,
+      extensionHeaders:{
+        // 'Content-Type': "application/octet-stream",
+        "x-goog-meta-typeofdocument": payload.type,
+        "x-goog-meta-descriptionofdocument": payload.description,
+        "x-goog-meta-inventoryid": payload.inventoryId
+      }
+    } 
+    // Generate the signed URL
+    const [url] = await file.getSignedUrl(options);
+    console.log(url);
+    return url;
   }
 
   async create(createInventoryDto): Promise<Inventory> {

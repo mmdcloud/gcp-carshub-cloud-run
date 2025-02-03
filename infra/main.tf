@@ -2,14 +2,79 @@
 data "google_project" "project" {}
 data "google_storage_project_service_account" "carshub_gcs_account" {}
 
+# Enable APIS
+module "carshub_apis" {
+  source = "./modules/apis"
+  apis = [
+    "compute.googleapis.com",
+    "secretmanager.googleapis.com",
+    "artifactregistry.googleapis.com",
+    "run.googleapis.com",
+    "cloudfunctions.googleapis.com",
+    "eventarc.googleapis.com",
+    "sqladmin.googleapis.com",
+    "binaryauthorization.googleapis.com"
+  ]  
+  disable_on_destroy = false
+  project_id         = data.google_project.project.project_id
+}
+
+# VPC Module
+module "carshub_vpc" {
+  source                   = "./modules/vpc"
+  auto_create_subnetworks  = false
+  vpc_name                 = "carshub-vpc"
+  private_ip_google_access = true
+  location                 = var.location
+  firewall_data            = []
+  # firewall_data = [
+  #   {
+  #     allow_list = [
+  #       {
+  #         ports    = ["80"]
+  #         protocol = "tcp"
+  #       },
+  #       {
+  #         ports    = ["22"]
+  #         protocol = "tcp"
+  #       },
+  #       {
+  #         ports    = ["3000"]
+  #         protocol = "tcp"
+  #       }
+  #     ]
+  #     firewall_name      = "carshub-firewall"
+  #     firewall_direction = "INGRESS"
+  #     source_ranges      = ["0.0.0.0/0"]
+  #   }
+  # ]
+  subnets = [
+    {
+      name          = "carshub-subnet"
+      ip_cidr_range = "10.0.1.0/24"
+    }
+  ]
+}
+
+# Creating a Serverless VPC connector
+module "carshub_connector" {
+  source        = "./modules/serverless-vpc"
+  name          = "carshub-connector"
+  ip_cidr_range = "10.8.0.0/28"
+  network_name  = module.carshub_vpc.vpc_name
+  min_instances = 2
+  max_instances = 5
+  machine_type  = "f1-micro"
+}
+
 # Artifact Registry
 module "carshub_frontend_artifact_registry" {
   source        = "./modules/artifact-registry"
   location      = var.location
   description   = "CarHub frontend repository"
   repository_id = "carshub-frontend"
-  shell_command = "bash ${path.cwd}/../frontend/artifact_push.sh ${module.carshub_backend_service.service_uri}"
-  depends_on    = [module.carshub_backend_service]
+  shell_command = "bash ${path.cwd}/../frontend/artifact_push.sh"
+  depends_on    = [module.carshub_backend_service, module.carshub_apis]
 }
 
 module "carshub_backend_artifact_registry" {
@@ -17,23 +82,46 @@ module "carshub_backend_artifact_registry" {
   location      = var.location
   description   = "CarHub backend repository"
   repository_id = "carshub-backend"
-  shell_command = "bash ${path.cwd}/../backend/api/artifact_push.sh ${module.carshub_db.db_ip_address} ${module.carshub_db.db_user} ${module.carshub_db.db_password}"
-  depends_on    = [module.carshub_db]
+  shell_command = "bash ${path.cwd}/../backend/api/artifact_push.sh"
+  depends_on    = [module.carshub_db, module.carshub_apis]
 }
 
 # GCS
 module "carshub_media_bucket" {
-  source                      = "./modules/gcs"
-  location                    = var.location
-  name                        = "carshub-media"
+  source   = "./modules/gcs"
+  location = var.location
+  name     = "carshub-media"
+  cors = [
+    {
+      origin          = [module.carshub_frontend_service.service_uri]
+      max_age_seconds = 3600
+      method          = ["GET", "POST", "PUT", "DELETE"]
+      response_header = ["*"]
+    }
+  ]
   force_destroy               = true
   uniform_bucket_level_access = true
+}
+
+module "carshub_media_images_folder" {
+  source  = "./modules/gcs/object"
+  name    = "images/"
+  bucket  = module.carshub_media_bucket.bucket_name
+  content = " "
+}
+
+module "carshub_media_documents_folder" {
+  source  = "./modules/gcs/object"
+  name    = "documents/"
+  bucket  = module.carshub_media_bucket.bucket_name
+  content = " "
 }
 
 module "carshub_media_bucket_code" {
   source                      = "./modules/gcs"
   location                    = var.location
   name                        = "carshub-media-code"
+  cors                        = []
   force_destroy               = true
   uniform_bucket_level_access = true
 }
@@ -43,6 +131,16 @@ module "carshub_media_bucket_code_object" {
   name        = "code.zip"
   bucket      = module.carshub_media_bucket_code.bucket_name
   source_path = "${path.root}/files/code.zip"
+}
+
+# Cloud storage IAM binding
+resource "google_storage_bucket_iam_binding" "storage_iam_binding" {
+  bucket = module.carshub_media_bucket.bucket_name
+  role   = "roles/storage.objectAdmin"
+
+  members = [
+    "allUsers"
+  ]
 }
 
 # CDN for handling media files
@@ -65,6 +163,7 @@ module "cdn_lb" {
   global_address_name   = "carshub-cdn-lb-global-address"
   target_proxy_name     = "carshub-cdn-target-proxy"
   url_map_service       = module.carshub_cdn.cdn_self_link
+  depends_on            = [module.carshub_apis]
 }
 
 # Secret Manager
@@ -72,19 +171,23 @@ module "carshub_sql_password_secret" {
   source      = "./modules/secret-manager"
   secret_data = "Mohitdixit12345!"
   secret_id   = "carshub_db_password_secret"
+  depends_on  = [module.carshub_apis]
 }
 
 # Cloud SQL
 module "carshub_db" {
-  source     = "./modules/cloud-sql"
-  name       = "carshub-db-instance"
-  db_name    = "carshub"
-  db_user    = "mohit"
-  db_version = "MYSQL_8_0"
-  location   = var.location
-  tier       = "db-f1-micro"
-  password   = module.carshub_sql_password_secret.secret_data
-  depends_on = [module.carshub_sql_password_secret]
+  source        = "./modules/cloud-sql"
+  name          = "carshub-db-instance"
+  db_name       = "carshub"
+  db_user       = "mohit"
+  db_version    = "MYSQL_8_0"
+  location      = var.location
+  tier          = "db-f1-micro"
+  ipv4_enabled  = false
+  vpc_self_link = module.carshub_vpc.self_link
+  vpc_id        = module.carshub_vpc.vpc_id
+  password      = module.carshub_sql_password_secret.secret_data
+  depends_on    = [module.carshub_sql_password_secret]
 }
 
 # Cloud Run
@@ -103,7 +206,9 @@ module "carshub_frontend_service" {
   source               = "./modules/cloud-run"
   deletion_protection  = false
   ingress              = "INGRESS_TRAFFIC_ALL"
+  vpc_connector_name   = module.carshub_connector.connector_id
   volume_mounts        = []
+  service_account      = module.carshub_service_account.sa_email
   location             = var.location
   image                = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-frontend/carshub-frontend:latest"
   max_instance_count   = 2
@@ -116,16 +221,23 @@ module "carshub_frontend_service" {
       name         = "BASE_URL"
       value        = module.carshub_backend_service.service_uri
       value_source = []
+    },
+    {
+      name         = "CDN_URL"
+      value        = module.cdn_lb.ip_address
+      value_source = []
     }
   ]
-  depends_on = [module.carshub_frontend_artifact_registry]
+  depends_on = [module.carshub_frontend_artifact_registry, module.carshub_apis]
 }
 
 # Backend Service
 module "carshub_backend_service" {
   source              = "./modules/cloud-run"
   deletion_protection = false
+  vpc_connector_name  = module.carshub_connector.connector_id
   ingress             = "INGRESS_TRAFFIC_ALL"
+  service_account     = module.carshub_service_account.sa_email
   location            = var.location
   max_instance_count  = 2
   volumes = [
@@ -147,7 +259,7 @@ module "carshub_backend_service" {
   env = [
     {
       name         = "DB_PATH"
-      value        = module.carshub_db.db_ip_address
+      value        = "${module.carshub_db.db_ip_address}"
       value_source = []
     },
     {
@@ -170,7 +282,7 @@ module "carshub_backend_service" {
       ]
     }
   ]
-  depends_on = [module.carshub_sql_password_secret, module.carshub_backend_artifact_registry]
+  depends_on = [module.carshub_apis, module.carshub_sql_password_secret, module.carshub_backend_artifact_registry, module.carshub_connector]
 }
 
 # Service Account
@@ -192,6 +304,14 @@ module "invoking_permission" {
   source     = "./modules/service-account-iam"
   project    = data.google_project.project.project_id
   role       = "roles/run.invoker"
+  member     = "serviceAccount:${module.carshub_service_account.sa_email}"
+  depends_on = [module.carshub_gcs_account_pubsub_publishing]
+}
+
+module "storage_admin" {
+  source     = "./modules/service-account-iam"
+  project    = data.google_project.project.project_id
+  role       = "roles/storage.admin"
   member     = "serviceAccount:${module.carshub_service_account.sa_email}"
   depends_on = [module.carshub_gcs_account_pubsub_publishing]
 }
@@ -219,6 +339,22 @@ module "artifactregistry_reader_permission" {
   depends_on = [module.event_receiving_permission]
 }
 
+module "secret_manager_accessor" {
+  source     = "./modules/service-account-iam"
+  project    = data.google_project.project.project_id
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:${module.carshub_service_account.sa_email}"
+  depends_on = [module.event_receiving_permission]
+}
+
+module "service_account_token_creator" {
+  source     = "./modules/service-account-iam"
+  project    = data.google_project.project.project_id
+  role       = "roles/iam.serviceAccountTokenCreator"
+  member     = "serviceAccount:${module.carshub_service_account.sa_email}"
+  depends_on = [module.event_receiving_permission]
+}
+
 # Cloud Run Function
 module "carshub_media_update_function" {
   source               = "./modules/cloud-run-function"
@@ -241,6 +377,8 @@ module "carshub_media_update_function" {
     DB_PATH                  = module.carshub_db.db_ip_address
   }
   all_traffic_on_latest_revision = true
+  vpc_connector                  = module.carshub_connector.connector_id
+  vpc_connector_egress_settings  = "ALL_TRAFFIC"
   ingress_settings               = "ALLOW_ALL"
   sa                             = module.carshub_service_account.sa_email
   max_instance_count             = 3

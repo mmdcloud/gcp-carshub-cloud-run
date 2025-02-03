@@ -15,13 +15,13 @@ export const databaseProviders = [
         useFactory: async () => {
             const sequelize = new Sequelize({
                 dialect: 'mysql',
-                host: "/cloudsql/nodal-talon-445602-m1:us-central1:carshub-db-instance",
+                host: process.env.DB_PATH,
                 port: 3306,
+                // dialectOptions:{
+                //     sockerPath:process.env.DB_PATH
+                // },
                 username: process.env.UN,
-                password: process.env.CREDS,
-                dialectOptions: {
-                    socketPath: "/cloudsql/nodal-talon-445602-m1:us-central1:carshub-db-instance"
-                },
+                password: process.env.CREDS,                
                 database: 'carshub',
             });
             sequelize.addModels([

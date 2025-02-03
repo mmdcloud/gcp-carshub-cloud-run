@@ -21,8 +21,8 @@ def get_db_connection():
     connection = mysql.connector.connect(
         user=DB_USER,
         database=DB_NAME,
-        host=DB_PATH,
-        # unix_socket=f'/cloudsql/{INSTANCE_CONNECTION_NAME}',
+        # host=DB_PATH,
+        unix_socket=f'/cloudsql/{INSTANCE_CONNECTION_NAME}',
         password=DB_PASSWORD
     )
     return connection
@@ -42,7 +42,7 @@ def handler(event, context):
     print(context)
     try:
         connection = get_db_connection()        
-        insertRecord(connection,"a", "b", "c", "d")
+        insertRecord(connection,event["metadata"]["inventoryid"], "b", event["metadata"]["typeofdocument"], event["metadata"]["descriptionofdocument"])
         connection.close()
         return f"Record inserted successfully.", 200
 
