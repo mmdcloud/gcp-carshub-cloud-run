@@ -5,7 +5,7 @@ cd frontend-code
 
 cat > .env << EOL
 BASE_URL=$1
-CDN_URL=""
+CDN_URL=$2
 EOL
 
 docker buildx build --tag carshub-frontend --file ./Dockerfile .

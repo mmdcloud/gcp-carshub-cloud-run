@@ -7,11 +7,11 @@ resource "google_compute_global_address" "global_address" {
 # GCP URL MAP
 resource "google_compute_url_map" "url_map" {
   name            = var.url_map_name
-  default_service = var.url_map_service
+  default_service = var.url_map_service  
   host_rule {
     hosts        = ["*"]
     path_matcher = "allpaths"
-  }
+  }  
   path_matcher {
     name            = "allpaths"
     default_service = var.url_map_service

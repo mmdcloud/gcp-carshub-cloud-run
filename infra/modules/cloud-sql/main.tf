@@ -10,7 +10,7 @@ resource "google_service_networking_connection" "private_vpc_connection" {
   network                 = var.vpc_id
   service                 = "servicenetworking.googleapis.com"
   update_on_creation_fail = true
-  deletion_policy = "ABANDON"
+  deletion_policy         = "ABANDON"
   reserved_peering_ranges = [google_compute_global_address.carshub_sql_private_ip_address.name]
 }
 
@@ -20,10 +20,27 @@ resource "google_sql_database_instance" "db_instance" {
   database_version = var.db_version
   root_password    = var.password
   settings {
-    tier = var.tier
+    tier                        = var.tier
+    deletion_protection_enabled = var.deletion_protection_enabled
+    dynamic "backup_configuration" {
+      for_each = var.backup_configuration
+      content {
+        enabled                        = backup_configuration.value["enabled"]
+        location                       = backup_configuration.value["location"]
+        start_time                     = backup_configuration.value["start_time"]
+        point_in_time_recovery_enabled = backup_configuration.value["point_in_time_recovery_enabled"]
+        dynamic "backup_retention_settings" {
+          for_each = backup_configuration.value["backup_retention_settings"]
+          content {
+            retained_backups = backup_retention_settings.value["retained_backups"]
+            retention_unit   = backup_retention_settings.value["retention_unit"]
+          }
+        }
+      }
+    }
     ip_configuration {
-      ipv4_enabled = var.ipv4_enabled
-      private_network = var.vpc_self_link
+      ipv4_enabled                                  = var.ipv4_enabled
+      private_network                               = var.vpc_self_link
       enable_private_path_for_google_cloud_services = true
       # authorized_networks {
       #   name  = "all"
@@ -33,7 +50,7 @@ resource "google_sql_database_instance" "db_instance" {
   }
 
   deletion_protection = false
-  depends_on = [ google_service_networking_connection.private_vpc_connection ]
+  depends_on          = [google_service_networking_connection.private_vpc_connection]
 }
 
 

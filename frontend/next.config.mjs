@@ -2,14 +2,19 @@
 const nextConfig = {
     output: "standalone",
     env : {
-        BASE_URL:process.env.BASE_URL
+        BASE_URL:process.env.BASE_URL,
+        CDN_URLsud:process.env.CDN_URL
     },
     images: {
         remotePatterns: [
             {
                 hostname: "picsum.photos",
                 protocol: "https"
-            }            
+            },
+            {
+                hostname: process.env.CDN_URL,
+                protocol: "http"
+            }
         ]
     },
     redirects: () => {
