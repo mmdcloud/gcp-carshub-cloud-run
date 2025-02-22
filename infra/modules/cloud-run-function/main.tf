@@ -7,18 +7,15 @@ resource "google_cloudfunctions2_function" "carshub_media_function" {
     entry_point           = var.handler
     environment_variables = var.build_env_variables
     source {
-      dynamic "storage_source" {
-        for_each = var.storage_source
-        content {
-          bucket = storage_source.value["bucket"]
-          object = storage_source.value["object"]
-        }
+      storage_source {
+        bucket = var.storage_source_bucket
+        object = var.storage_source_bucket_object
       }
     }
   }
   service_config {
-    vpc_connector = var.vpc_connector
-    vpc_connector_egress_settings = var.vpc_connector_egress_settings
+    vpc_connector                  = var.vpc_connector
+    vpc_connector_egress_settings  = var.vpc_connector_egress_settings
     max_instance_count             = var.max_instance_count
     min_instance_count             = var.min_instance_count
     available_memory               = var.available_memory
@@ -26,20 +23,17 @@ resource "google_cloudfunctions2_function" "carshub_media_function" {
     environment_variables          = var.build_env_variables
     ingress_settings               = var.ingress_settings
     all_traffic_on_latest_revision = var.all_traffic_on_latest_revision
-    service_account_email          = var.sa
+    service_account_email          = var.function_app_service_account_email
   }
-  dynamic "event_trigger" {
-    for_each = var.event_triggers
-    content {
-      event_type            = event_trigger.value["event_type"]
-      retry_policy          = event_trigger.value["retry_policy"]
-      service_account_email = event_trigger.value["service_account_email"]
-      dynamic "event_filters" {
-        for_each = event_trigger.value["event_filters"]
-        content {
-          attribute = event_filters.value["attribute"]
-          value     = event_filters.value["value"]
-        }
+  event_trigger {
+    event_type            = var.event_trigger_event_type
+    retry_policy          = var.event_trigger_retry_policy
+    service_account_email = var.event_trigger_service_account_email
+    dynamic "event_filters" {
+      for_each = var.event_filters
+      content {
+        attribute = event_filters.value["attribute"]
+        value     = event_filters.value["value"]
       }
     }
   }

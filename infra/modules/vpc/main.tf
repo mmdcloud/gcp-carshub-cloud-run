@@ -6,12 +6,12 @@ resource "google_compute_network" "vpc" {
 
 # Subnets
 resource "google_compute_subnetwork" "subnet" {
-  count         = length(var.subnets)
-  name          = element(var.subnets[*].name, count.index)
-  ip_cidr_range = element(var.subnets[*].ip_cidr_range, count.index)
-  region        = var.location
+  count                    = length(var.subnets)
+  name                     = element(var.subnets[*].name, count.index)
+  ip_cidr_range            = element(var.subnets[*].ip_cidr_range, count.index)
+  region                   = var.location
   private_ip_google_access = var.private_ip_google_access
-  network       = google_compute_network.vpc.id
+  network                  = google_compute_network.vpc.id
 }
 
 # allow access from health check ranges
@@ -30,4 +30,15 @@ resource "google_compute_firewall" "carshub_firewall" {
     }
   }
   target_tags = element(var.firewall_data[*].target_tags, count.index)
+}
+
+# Serverless VPC Connector
+resource "google_vpc_access_connector" "connector" {
+  count         = length(var.serverless_vpc_connectors)
+  network       = google_compute_network.vpc.name
+  name          = var.serverless_vpc_connectors[count.index].name
+  ip_cidr_range = var.serverless_vpc_connectors[count.index].ip_cidr_range
+  min_instances = var.serverless_vpc_connectors[count.index].min_instances
+  max_instances = var.serverless_vpc_connectors[count.index].max_instances
+  machine_type  = var.serverless_vpc_connectors[count.index].machine_type
 }

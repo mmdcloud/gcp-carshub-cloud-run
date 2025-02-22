@@ -13,3 +13,7 @@ output "vpc_name" {
 output "self_link" {
   value = google_compute_network.vpc.self_link
 }
+
+output "vpc_connectors" {
+  value = google_vpc_access_connector.connector[*]
+}
