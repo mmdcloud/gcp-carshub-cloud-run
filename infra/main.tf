@@ -381,3 +381,20 @@ module "carshub_media_update_function" {
   ]
   depends_on = [module.carshub_function_app_service_account]
 }
+
+# CloudBuild configuration
+module "carshub_frontend_trigger" {
+  source     = "./modules/cloudbuild"
+  source_uri = "https://github.com/mmdcloud/carshub-gcp-cloud-run"
+  source_ref = "refs/heads/frontend"
+  repo_type  = "GITHUB"
+  filename   = "cloudbuild.yaml"
+}
+
+module "carshub_backend_trigger" {
+  source     = "./modules/cloudbuild"
+  source_uri = "https://github.com/mmdcloud/carshub-gcp-cloud-run"
+  source_ref = "refs/heads/backend"
+  repo_type  = "GITHUB"
+  filename   = "cloudbuild.yaml"
+}
