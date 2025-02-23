@@ -1,7 +1,0 @@
-functions-framework
-pymysql
-google-auth
-DateTime
-mysql.connector
-SQLAlchemy==1.3.12
-google-cloud-secret-manager
