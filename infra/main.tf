@@ -58,6 +58,20 @@ module "carshub_function_app_service_account" {
   ]
 }
 
+module "carshub_cloudbuild_service_account" {
+  source       = "./modules/service-account"
+  account_id   = "carshub-cloudbuild-sa"
+  display_name = "CarsHub Cloudbuild Service Account"
+  project_id   = data.google_project.project.project_id
+  permissions = [
+    "roles/run.developer",
+    "roles/logging.logWriter",
+    "roles/iam.serviceAccountUser",
+    "roles/artifactregistry.reader",
+    "roles/artifactregistry.writer"
+  ]
+}
+
 module "carshub_cloud_run_service_account" {
   source       = "./modules/service-account"
   account_id   = "carshub-cloud-run-sa"
@@ -383,18 +397,26 @@ module "carshub_media_update_function" {
 }
 
 # CloudBuild configuration
-module "carshub_frontend_trigger" {
-  source     = "./modules/cloudbuild"
-  source_uri = "https://github.com/mmdcloud/carshub-gcp-cloud-run"
-  source_ref = "refs/heads/frontend"
-  repo_type  = "GITHUB"
-  filename   = "cloudbuild.yaml"
+module "carshub_cloudbuild_frontend_trigger" {
+  source          = "./modules/cloudbuild"
+  trigger_name    = "carshub-frontend-trigger"
+  location        = var.location
+  repo_name       = "mmdcloud-carshub-gcp-cloud-run"
+  source_uri      = "https://github.com/mmdcloud/carshub-gcp-cloud-run"
+  source_ref      = "frontend"
+  repo_type       = "GITHUB"
+  filename        = "cloudbuild.yaml"
+  service_account = module.carshub_cloudbuild_service_account.id
 }
 
-module "carshub_backend_trigger" {
-  source     = "./modules/cloudbuild"
-  source_uri = "https://github.com/mmdcloud/carshub-gcp-cloud-run"
-  source_ref = "refs/heads/backend"
-  repo_type  = "GITHUB"
-  filename   = "cloudbuild.yaml"
+module "carshub_cloudbuild_backend_trigger" {
+  source          = "./modules/cloudbuild"
+  trigger_name    = "carshub-backend-trigger"
+  location        = var.location
+  repo_name       = "mmdcloud-carshub-gcp-cloud-run"
+  source_uri      = "https://github.com/mmdcloud/carshub-gcp-cloud-run"
+  source_ref      = "backend"
+  repo_type       = "GITHUB"
+  filename        = "cloudbuild.yaml"
+  service_account = module.carshub_cloudbuild_service_account.id
 }
