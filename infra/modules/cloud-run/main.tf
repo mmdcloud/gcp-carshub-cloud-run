@@ -7,7 +7,6 @@ resource "google_cloud_run_v2_service" "cloud_run_service" {
   location            = var.location
   deletion_protection = var.deletion_protection
   ingress             = var.ingress
-
   template {
     service_account = var.service_account
     scaling {

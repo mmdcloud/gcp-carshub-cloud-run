@@ -54,7 +54,8 @@ module "carshub_function_app_service_account" {
     "roles/run.invoker",
     "roles/eventarc.eventReceiver",
     "roles/cloudsql.client",
-    "roles/artifactregistry.reader"
+    "roles/artifactregistry.reader",
+    "roles/secretmanager.admin"
   ]
 }
 
@@ -369,11 +370,10 @@ module "carshub_media_update_function" {
   storage_source_bucket        = module.carshub_media_bucket_code.bucket_name
   storage_source_bucket_object = module.carshub_media_bucket_code.object_name[0].name
   build_env_variables = {
-    INSTANCE_CONNECTION_NAME = "${data.google_project.project.project_id}:${var.location}:${module.carshub_db.db_name}"
-    DB_USER                  = module.carshub_db.db_user
-    DB_NAME                  = module.carshub_db.db_name
-    DB_PASSWORD              = module.carshub_sql_password_secret.secret_data
-    DB_PATH                  = module.carshub_db.db_ip_address
+    DB_USER     = module.carshub_db.db_user
+    DB_NAME     = module.carshub_db.db_name
+    SECRET_NAME = module.carshub_sql_password_secret.secret_name
+    DB_PATH     = module.carshub_db.db_ip_address
   }
   all_traffic_on_latest_revision      = true
   vpc_connector                       = module.carshub_vpc.vpc_connectors[0].id

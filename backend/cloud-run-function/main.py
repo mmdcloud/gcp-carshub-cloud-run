@@ -9,17 +9,31 @@ from google.auth import default
 DB_USER = os.environ.get('DB_USER')
 DB_PATH = os.environ.get('DB_PATH')
 DB_NAME = "carshub"
-DB_PASSWORD = os.environ.get('DB_PASSWORD')
+SECRET_NAME = os.environ.get('SECRET_NAME')
 table_name = "InventoryImages"
+
+def access_secret(secret_name, version_id="1"):
+    # Create the Secret Manager client
+    client = secretmanager.SecretManagerServiceClient()
+    
+    # Build the resource name of the secret version
+    name = f"{secret_name}/versions/{version_id}"
+    
+    # Access the secret version
+    response = client.access_secret_version(request={"name": name})
+    
+    # Return the decoded payload
+    return response.payload.data.decode("UTF-8")
 
 # Function to connect to Cloud SQL
 def get_db_connection():
+    db_password = access_secret(SECRET_NAME)
     """Return a MySQL database connection."""
     connection = mysql.connector.connect(
         user=DB_USER,
         database=DB_NAME,
         host=DB_PATH,        
-        password=DB_PASSWORD
+        password=db_password
     )
     return connection
 
