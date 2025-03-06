@@ -1,6 +1,8 @@
 import os
 import mysql.connector
 import sqlalchemy
+from google.cloud import storage
+import base64
 from datetime import datetime
 from google.cloud import secretmanager
 from google.cloud import functions_v1
@@ -11,6 +13,8 @@ DB_PATH = os.environ.get('DB_PATH')
 DB_NAME = "carshub"
 SECRET_NAME = os.environ.get('SECRET_NAME')
 table_name = "InventoryImages"
+
+storage_client = storage.Client()
 
 def access_secret(secret_name, version_id="1"):
     # Create the Secret Manager client
@@ -51,8 +55,12 @@ def handler(event, context):
     print("Context")
     print(context)
     try:
-        connection = get_db_connection()        
-        insertRecord(connection,event["metadata"]["inventoryid"], event["name"], event["metadata"]["typeofdocument"], event["metadata"]["descriptionofdocument"])
+        connection = get_db_connection()
+        if event["attributes"]["eventType"] == "OBJECT_FINALIZE":
+            decoded_dict = base64.b64decode(event["data"]).decode('utf-8')            
+            bucket = storage_client.bucket(event["attributes"]["bucketId"])
+            blob = bucket.get_blob(decoded_dict["name"])
+            insertRecord(connection,blob.metadata["inventoryid"], decoded_dict["name"], blob.metadata["typeofdocument"], blob.metadata["descriptionofdocument"])
         connection.close()
         return f"Record inserted successfully.", 200
 

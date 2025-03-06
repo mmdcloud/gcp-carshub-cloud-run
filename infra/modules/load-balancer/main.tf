@@ -1,3 +1,17 @@
+# Compute backend
+resource "google_compute_backend_service" "backend" {
+  name        = var.backend_service_name
+  protocol    = var.backend_service_protocol
+  timeout_sec = var.backend_service_timeout
+  
+  dynamic "backend" {
+    for_each = var.backends
+    content {
+      group = backend.value["backend"]
+    }
+  }
+}
+
 # Reserve an external IP for CDN
 resource "google_compute_global_address" "global_address" {
   name         = var.global_address_name
@@ -7,15 +21,7 @@ resource "google_compute_global_address" "global_address" {
 # GCP URL MAP
 resource "google_compute_url_map" "url_map" {
   name            = var.url_map_name
-  default_service = var.url_map_service  
-  host_rule {
-    hosts        = ["*"]
-    path_matcher = "allpaths"
-  }  
-  path_matcher {
-    name            = "allpaths"
-    default_service = var.url_map_service
-  }
+  default_service = google_compute_backend_service.backend.id  
 }
 
 
@@ -33,3 +39,4 @@ resource "google_compute_global_forwarding_rule" "global_forwarding_rule" {
   port_range            = var.forwarding_port_range
   target                = google_compute_target_http_proxy.target_http_proxy.self_link
 }
+

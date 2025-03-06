@@ -27,6 +27,7 @@ resource "google_cloudfunctions2_function" "carshub_media_function" {
   }
   event_trigger {
     event_type            = var.event_trigger_event_type
+    pubsub_topic          = var.event_trigger_topic
     retry_policy          = var.event_trigger_retry_policy
     service_account_email = var.event_trigger_service_account_email
     dynamic "event_filters" {

@@ -4,5 +4,12 @@ variable "url_map_name" {}
 variable "forwarding_scheme" {}
 variable "forwarding_rule_name" {}
 variable "target_proxy_name" {}
-variable "url_map_service" {}
 variable "forwarding_port_range" {}
+variable "backends" {
+  type = list(object({
+    backend = string
+  }))
+}
+variable "backend_service_name" {}
+variable "backend_service_protocol" {}
+variable "backend_service_timeout" {}

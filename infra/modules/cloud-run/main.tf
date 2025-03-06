@@ -61,7 +61,7 @@ resource "google_cloud_run_v2_service" "cloud_run_service" {
         }
       }
     }
-  }
+  }  
   dynamic "traffic" {
     for_each = var.traffic
     content {

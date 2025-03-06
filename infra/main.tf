@@ -1,5 +1,27 @@
+# {
+#   "kind": "storage#object",
+#   "id": "carshub-media/images/image-1.jpg/1740710258836364",
+#   "selfLink": "https://www.googleapis.com/storage/v1/b/carshub-media/o/images%2Fimage-1.jpg",
+#   "name": "images/image-1.jpg",
+#   "bucket": "carshub-media",
+#   "generation": "1740710258836364",
+#   "metageneration": "1",
+#   "contentType": "image/jpeg",
+#   "timeCreated": "2025-02-28T02:37:38.840Z",
+#   "updated": "2025-02-28T02:37:38.840Z",
+#   "storageClass": "STANDARD",
+#   "timeStorageClassUpdated": "2025-02-28T02:37:38.840Z",
+#   "size": "53663",
+#   "md5Hash": "RKBwMglaone1nvCb67qHKA==",
+#   "mediaLink": "https://storage.googleapis.com/download/storage/v1/b/carshub-media/o/images%2Fimage-1.jpg?generation=1740710258836364&alt=media",
+#   "crc32c": "E2gNlQ==",
+#   "etag": "CIyHioWr5YsDEAE="
+# }
+
+
 # Getting project information
 data "google_project" "project" {}
+data "google_storage_transfer_project_service_account" "default" {}
 data "google_storage_project_service_account" "carshub_gcs_account" {}
 
 # Enable APIS
@@ -13,7 +35,8 @@ module "carshub_apis" {
     "cloudfunctions.googleapis.com",
     "eventarc.googleapis.com",
     "sqladmin.googleapis.com",
-    "binaryauthorization.googleapis.com"
+    "binaryauthorization.googleapis.com",
+    "storagetransfer.googleapis.com"
   ]
   disable_on_destroy = false
   project_id         = data.google_project.project.project_id
@@ -55,7 +78,8 @@ module "carshub_function_app_service_account" {
     "roles/eventarc.eventReceiver",
     "roles/cloudsql.client",
     "roles/artifactregistry.reader",
-    "roles/secretmanager.admin"
+    "roles/secretmanager.admin",
+    "roles/pubsub.admin"
   ]
 }
 
@@ -86,11 +110,24 @@ module "carshub_cloud_run_service_account" {
 }
 
 # Service Account Permissions
-module "carshub_gcs_account_pubsub_publishing" {
-  source  = "./modules/service-account-iam"
-  project = data.google_project.project.project_id
+# module "carshub_gcs_account_pubsub_publishing" {
+#   source  = "./modules/service-account-iam"
+#   project = data.google_project.project.project_id
+#   role    = "roles/pubsub.publisher"
+#   member  = "serviceAccount:${data.google_storage_project_service_account.carshub_gcs_account.email_address}"
+# }
+
+// Create a Pub/Sub topic.
+resource "google_pubsub_topic_iam_binding" "binding" {
+  topic   = module.carshub_media_bucket_pubsub.topic_id
   role    = "roles/pubsub.publisher"
-  member  = "serviceAccount:${data.google_storage_project_service_account.carshub_gcs_account.email_address}"
+  members = ["serviceAccount:${data.google_storage_project_service_account.carshub_gcs_account.email_address}"]
+}
+
+# Creating a Pub/Sub topic to send cloud storage events
+module "carshub_media_bucket_pubsub" {
+  source = "./modules/pubsub"
+  topic  = "carshub_media_bucket_events"
 }
 
 # Artifact Registry
@@ -99,7 +136,7 @@ module "carshub_frontend_artifact_registry" {
   location      = var.location
   description   = "CarHub frontend repository"
   repository_id = "carshub-frontend"
-  shell_command = "bash ${path.cwd}/../frontend/artifact_push.sh ${module.carshub_backend_service.service_uri} http://${module.cdn_lb.ip_address}"
+  shell_command = "bash ${path.cwd}/../frontend/artifact_push.sh http://${module.carshub_backend_service_lb.ip_address} http://${module.carshub_cdn.cdn_ip_address}"
   depends_on    = [module.carshub_backend_service, module.carshub_apis]
 }
 
@@ -119,10 +156,31 @@ module "carshub_media_bucket" {
   name     = "carshub-media"
   cors = [
     {
-      origin          = [module.carshub_frontend_service.service_uri]
+      origin          = [module.carshub_frontend_service_lb.ip_address]
       max_age_seconds = 3600
       method          = ["GET", "POST", "PUT", "DELETE"]
       response_header = ["*"]
+    }
+  ]
+  versioning = true
+  lifecycle_rules = [
+    {
+      condition = {
+        age = 1
+      }
+      action = {
+        type          = "AbortIncompleteMultipartUpload"
+        storage_class = null
+      }
+    },
+    {
+      condition = {
+        age = 1095
+      }
+      action = {
+        storage_class = "ARCHIVE"
+        type          = "SetStorageClass"
+      }
     }
   ]
   contents = [
@@ -135,39 +193,66 @@ module "carshub_media_bucket" {
       name        = "documents/"
       content     = " "
       source_path = ""
+    }
+  ]
+  notifications = [
+    {
+      topic_id = module.carshub_media_bucket_pubsub.topic_id
     }
   ]
   force_destroy               = true
   uniform_bucket_level_access = true
 }
 
-module "carshub_media_bucket_backup" {
-  source   = "./modules/gcs"
-  location = var.location
-  name     = "carshub-media-backup"
-  cors = [
-    {
-      origin          = [module.carshub_frontend_service.service_uri]
-      max_age_seconds = 3600
-      method          = ["GET", "POST", "PUT", "DELETE"]
-      response_header = ["*"]
-    }
-  ]
-  contents = [
-    {
-      name        = "images/"
-      content     = " "
-      source_path = ""
-    },
-    {
-      name        = "documents/"
-      content     = " "
-      source_path = ""
-    }
-  ]
-  force_destroy               = true
-  uniform_bucket_level_access = true
-}
+# module "carshub_media_bucket_backup" {
+#   source   = "./modules/gcs"
+#   location = var.backup_location
+#   name     = "carshub-media-backup"
+#   cors = [
+#     {
+#       origin          = [module.carshub_frontend_service_lb.ip_address]
+#       max_age_seconds = 3600
+#       method          = ["GET", "POST", "PUT", "DELETE"]
+#       response_header = ["*"]
+#     }
+#   ]
+#   contents = [
+#     {
+#       name        = "images/"
+#       content     = " "
+#       source_path = ""
+#     },
+#     {
+#       name        = "documents/"
+#       content     = " "
+#       source_path = ""
+#     }
+#   ]
+#   force_destroy               = true
+#   uniform_bucket_level_access = true
+# }
+
+
+# resource "google_storage_bucket_iam_member" "source_bucket_iam" {
+#   bucket     = module.carshub_media_bucket.bucket_name
+#   role       = "roles/storage.admin"
+#   member     = "serviceAccount:${data.google_storage_transfer_project_service_account.default.email}"
+#   depends_on = [module.carshub_media_bucket]
+# }
+
+# resource "google_storage_bucket_iam_member" "destination_bucket_iam" {
+#   bucket     = module.carshub_media_bucket.bucket_name
+#   role       = "roles/storage.admin"
+#   member     = "serviceAccount:${data.google_storage_transfer_project_service_account.default.email}"
+#   depends_on = [module.carshub_media_bucket_backup]
+# }
+
+# # Carshub Media Bucket Replication
+# module "carshub_media_bucket_replication" {
+#   source        = "./modules/gcs_replication"
+#   source_bucket = module.carshub_media_bucket.bucket_name
+#   dest_bucket   = module.carshub_media_bucket.bucket_name
+# }
 
 module "carshub_media_bucket_code" {
   source   = "./modules/gcs"
@@ -197,16 +282,11 @@ resource "google_storage_bucket_iam_binding" "storage_iam_binding" {
 
 # CDN for handling media files
 module "carshub_cdn" {
-  source      = "./modules/cdn"
-  bucket_name = module.carshub_media_bucket.bucket_name
-  enable_cdn  = true
-  description = "Content delivery network for media files"
-  name        = "carshub-media-cdn"
-}
-
-# Load Balancer
-module "cdn_lb" {
-  source                = "./modules/load-balancer"
+  source                = "./modules/cdn"
+  bucket_name           = module.carshub_media_bucket.bucket_name
+  enable_cdn            = true
+  description           = "Content delivery network for media files"
+  name                  = "carshub-media-cdn"
   forwarding_port_range = "80"
   forwarding_rule_name  = "carshub-cdn-global-forwarding-rule"
   forwarding_scheme     = "EXTERNAL"
@@ -214,8 +294,6 @@ module "cdn_lb" {
   url_map_name          = "carshub-cdn-compute-url-map"
   global_address_name   = "carshub-cdn-lb-global-address"
   target_proxy_name     = "carshub-cdn-target-proxy"
-  url_map_service       = module.carshub_cdn.cdn_self_link
-  depends_on            = [module.carshub_apis]
 }
 
 # Secret Manager
@@ -384,16 +462,71 @@ module "carshub_media_update_function" {
   min_instance_count                  = 1
   available_memory                    = "256M"
   timeout_seconds                     = 60
-  event_trigger_event_type            = "google.cloud.storage.object.v1.finalized"
+  event_trigger_event_type            = "google.cloud.pubsub.topic.v1.messagePublished"
+  event_trigger_topic                 = module.carshub_media_bucket_pubsub.topic_id
   event_trigger_retry_policy          = "RETRY_POLICY_RETRY"
   event_trigger_service_account_email = module.carshub_function_app_service_account.sa_email
-  event_filters = [
+  event_filters                       = []
+  depends_on                          = [module.carshub_function_app_service_account]
+}
+
+# Network endpoint groups
+module "carshub_frontend_service_neg" {
+  source       = "./modules/network_endpoint_groups"
+  neg_name     = "carshub-frontend-service-neg"
+  neg_type     = "SERVERLESS"
+  location     = var.location
+  service_name = module.carshub_frontend_service.name
+}
+
+module "carshub_backend_service_neg" {
+  source       = "./modules/network_endpoint_groups"
+  neg_name     = "carshub-backend-service-neg"
+  neg_type     = "SERVERLESS"
+  location     = var.location
+  service_name = module.carshub_backend_service.name
+}
+
+# Load Balancer
+module "carshub_frontend_service_lb" {
+  source                   = "./modules/load-balancer"
+  forwarding_port_range    = "80"
+  forwarding_rule_name     = "carshub-frontend-service-global-forwarding-rule"
+  forwarding_scheme        = "EXTERNAL"
+  global_address_type      = "EXTERNAL"
+  url_map_name             = "carshub-frontend-service-compute-url-map"
+  global_address_name      = "carshub-frontend-service-lb-global-address"
+  target_proxy_name        = "carshub-frontend-service-target-proxy"
+  backend_service_name     = "carshub-frontend-compute"
+  backend_service_protocol = "HTTP"
+  backend_service_timeout  = 30
+  backends = [
     {
-      attribute = "bucket"
-      value     = module.carshub_media_bucket.bucket_name
+      backend = module.carshub_frontend_service_neg.id
     }
   ]
-  depends_on = [module.carshub_function_app_service_account]
+  depends_on = [module.carshub_frontend_service]
+}
+
+# Load Balancer
+module "carshub_backend_service_lb" {
+  source                   = "./modules/load-balancer"
+  forwarding_port_range    = "80"
+  forwarding_rule_name     = "carshub-backend-service-global-forwarding-rule"
+  forwarding_scheme        = "EXTERNAL"
+  global_address_type      = "EXTERNAL"
+  url_map_name             = "carshub-backend-service-compute-url-map"
+  global_address_name      = "carshub-backend-service-lb-global-address"
+  target_proxy_name        = "carshub-backend-service-target-proxy"
+  backend_service_name     = "carshub-backend-compute"
+  backend_service_protocol = "HTTP"
+  backend_service_timeout  = 30
+  backends = [
+    {
+      backend = module.carshub_backend_service_neg.id
+    }
+  ]
+  depends_on = [module.carshub_backend_service]
 }
 
 # CloudBuild configuration

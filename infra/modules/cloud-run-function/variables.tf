@@ -19,6 +19,7 @@ variable "vpc_connector_egress_settings" {}
 variable "storage_source_bucket" {}
 variable "storage_source_bucket_object" {}
 
+variable "event_trigger_topic" {}
 variable "event_trigger_event_type" {}
 variable "event_trigger_retry_policy" {}
 variable "event_trigger_service_account_email" {}
