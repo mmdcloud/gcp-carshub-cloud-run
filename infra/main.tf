@@ -18,6 +18,10 @@
 #   "etag": "CIyHioWr5YsDEAE="
 # }
 
+# Registering vault provider
+data "vault_generic_secret" "sql" {
+  path = "secret/sql"
+}
 
 # Getting project information
 data "google_project" "project" {}
@@ -42,20 +46,38 @@ module "carshub_apis" {
   project_id         = data.google_project.project.project_id
 }
 
-# VPC Module
+# VPC Creation
 module "carshub_vpc" {
-  source                   = "./modules/vpc"
-  auto_create_subnetworks  = false
-  vpc_name                 = "carshub-vpc"
-  private_ip_google_access = true
-  location                 = var.location
-  firewall_data            = []
+  source                  = "./modules/network/vpc"
+  auto_create_subnetworks = false
+  vpc_name                = "carshub-vpc"
+}
+
+# Subnets Creation
+module "carshub_subnets" {
+  source = "./modules/network/subnet"
   subnets = [
     {
       name          = "carshub-subnet"
       ip_cidr_range = "10.0.1.0/24"
     }
   ]
+  vpc_id                   = module.carshub_vpc.vpc_id
+  private_ip_google_access = true
+  location                 = var.location
+}
+
+# Firewall Creation
+module "carshub_firewall" {
+  source        = "./modules/network/firewall"
+  firewall_data = []
+  vpc_id        = module.carshub_vpc.vpc_id
+}
+
+# Serverless VPC Creation
+module "carshub_vpc_connectors" {
+  source   = "./modules/network/vpc-connector"
+  vpc_name = module.carshub_vpc.vpc_name
   serverless_vpc_connectors = [
     {
       name          = "carshub-connector"
@@ -216,6 +238,7 @@ module "carshub_media_bucket" {
 #       response_header = ["*"]
 #     }
 #   ]
+#   versioning = true
 #   contents = [
 #     {
 #       name        = "images/"
@@ -226,6 +249,31 @@ module "carshub_media_bucket" {
 #       name        = "documents/"
 #       content     = " "
 #       source_path = ""
+#     }
+#   ]
+#   lifecycle_rules = [
+#     {
+#       condition = {
+#         age = 1
+#       }
+#       action = {
+#         type          = "AbortIncompleteMultipartUpload"
+#         storage_class = null
+#       }
+#     },
+#     {
+#       condition = {
+#         age = 1095
+#       }
+#       action = {
+#         storage_class = "ARCHIVE"
+#         type          = "SetStorageClass"
+#       }
+#     }
+#   ]
+#   notifications = [
+#     {
+#       topic_id = module.carshub_media_bucket_pubsub.topic_id
 #     }
 #   ]
 #   force_destroy               = true
@@ -252,6 +300,7 @@ module "carshub_media_bucket" {
 #   source        = "./modules/gcs_replication"
 #   source_bucket = module.carshub_media_bucket.bucket_name
 #   dest_bucket   = module.carshub_media_bucket.bucket_name
+#   depends_on    = [google_storage_bucket_iam_member.destination_bucket_iam, google_storage_bucket_iam_member.source_bucket_iam]
 # }
 
 module "carshub_media_bucket_code" {
@@ -299,7 +348,7 @@ module "carshub_cdn" {
 # Secret Manager
 module "carshub_sql_password_secret" {
   source      = "./modules/secret-manager"
-  secret_data = "Mohitdixit12345!"
+  secret_data = tostring(data.vault_generic_secret.sql.data["password"])
   secret_id   = "carshub_db_password_secret"
   depends_on  = [module.carshub_apis]
 }
@@ -351,7 +400,7 @@ module "carshub_frontend_service" {
   source              = "./modules/cloud-run"
   deletion_protection = false
   ingress             = "INGRESS_TRAFFIC_ALL"
-  vpc_connector_name  = module.carshub_vpc.vpc_connectors[0].id
+  vpc_connector_name  = module.carshub_vpc_connectors.vpc_connectors[0].id
   service_account     = module.carshub_cloud_run_service_account.sa_email
   location            = var.location
   min_instance_count  = 1
@@ -378,7 +427,7 @@ module "carshub_frontend_service" {
 module "carshub_backend_service" {
   source              = "./modules/cloud-run"
   deletion_protection = false
-  vpc_connector_name  = module.carshub_vpc.vpc_connectors[0].id
+  vpc_connector_name  = module.carshub_vpc_connectors.vpc_connectors[0].id
   ingress             = "INGRESS_TRAFFIC_ALL"
   service_account     = module.carshub_cloud_run_service_account.sa_email
   location            = var.location
@@ -454,7 +503,7 @@ module "carshub_media_update_function" {
     DB_PATH     = module.carshub_db.db_ip_address
   }
   all_traffic_on_latest_revision      = true
-  vpc_connector                       = module.carshub_vpc.vpc_connectors[0].id
+  vpc_connector                       = module.carshub_vpc_connectors.vpc_connectors[0].id
   vpc_connector_egress_settings       = "ALL_TRAFFIC"
   ingress_settings                    = "ALLOW_INTERNAL_ONLY"
   function_app_service_account_email  = module.carshub_function_app_service_account.sa_email

@@ -1,6 +1,7 @@
 import os
 import mysql.connector
 import sqlalchemy
+import json
 from google.cloud import storage
 import base64
 from datetime import datetime
@@ -57,10 +58,11 @@ def handler(event, context):
     try:
         connection = get_db_connection()
         if event["attributes"]["eventType"] == "OBJECT_FINALIZE":
-            decoded_dict = base64.b64decode(event["data"]).decode('utf-8')            
+            decoded_dict = base64.b64decode(event["data"]).decode('utf-8')
+            final_dict = json.loads(decoded_dict)
             bucket = storage_client.bucket(event["attributes"]["bucketId"])
-            blob = bucket.get_blob(decoded_dict["name"])
-            insertRecord(connection,blob.metadata["inventoryid"], decoded_dict["name"], blob.metadata["typeofdocument"], blob.metadata["descriptionofdocument"])
+            blob = bucket.get_blob(final_dict["name"])
+            insertRecord(connection,blob.metadata["inventoryid"], final_dict["name"], blob.metadata["typeofdocument"], blob.metadata["descriptionofdocument"])
         connection.close()
         return f"Record inserted successfully.", 200
 
