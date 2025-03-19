@@ -3,7 +3,7 @@ const nextConfig = {
     output: "standalone",
     env : {
         BASE_URL:process.env.BASE_URL,
-        CDN_URLsud:process.env.CDN_URL
+        CDN_URL:"http://"+process.env.CDN_URL
     },
     images: {
         remotePatterns: [

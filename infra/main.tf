@@ -1,23 +1,3 @@
-# {
-#   "kind": "storage#object",
-#   "id": "carshub-media/images/image-1.jpg/1740710258836364",
-#   "selfLink": "https://www.googleapis.com/storage/v1/b/carshub-media/o/images%2Fimage-1.jpg",
-#   "name": "images/image-1.jpg",
-#   "bucket": "carshub-media",
-#   "generation": "1740710258836364",
-#   "metageneration": "1",
-#   "contentType": "image/jpeg",
-#   "timeCreated": "2025-02-28T02:37:38.840Z",
-#   "updated": "2025-02-28T02:37:38.840Z",
-#   "storageClass": "STANDARD",
-#   "timeStorageClassUpdated": "2025-02-28T02:37:38.840Z",
-#   "size": "53663",
-#   "md5Hash": "RKBwMglaone1nvCb67qHKA==",
-#   "mediaLink": "https://storage.googleapis.com/download/storage/v1/b/carshub-media/o/images%2Fimage-1.jpg?generation=1740710258836364&alt=media",
-#   "crc32c": "E2gNlQ==",
-#   "etag": "CIyHioWr5YsDEAE="
-# }
-
 # Registering vault provider
 data "vault_generic_secret" "sql" {
   path = "secret/sql"
@@ -131,15 +111,7 @@ module "carshub_cloud_run_service_account" {
   ]
 }
 
-# Service Account Permissions
-# module "carshub_gcs_account_pubsub_publishing" {
-#   source  = "./modules/service-account-iam"
-#   project = data.google_project.project.project_id
-#   role    = "roles/pubsub.publisher"
-#   member  = "serviceAccount:${data.google_storage_project_service_account.carshub_gcs_account.email_address}"
-# }
-
-// Create a Pub/Sub topic.
+// Creating a Pub/Sub topic.
 resource "google_pubsub_topic_iam_binding" "binding" {
   topic   = module.carshub_media_bucket_pubsub.topic_id
   role    = "roles/pubsub.publisher"
@@ -158,7 +130,7 @@ module "carshub_frontend_artifact_registry" {
   location      = var.location
   description   = "CarHub frontend repository"
   repository_id = "carshub-frontend"
-  shell_command = "bash ${path.cwd}/../frontend/artifact_push.sh http://${module.carshub_backend_service_lb.ip_address} http://${module.carshub_cdn.cdn_ip_address}"
+  shell_command = "bash ${path.cwd}/../frontend/artifact_push.sh http://${module.carshub_backend_service_lb.ip_address} ${module.carshub_cdn.cdn_ip_address}"
   depends_on    = [module.carshub_backend_service, module.carshub_apis]
 }
 
@@ -178,7 +150,7 @@ module "carshub_media_bucket" {
   name     = "carshub-media"
   cors = [
     {
-      origin          = [module.carshub_frontend_service_lb.ip_address]
+      origin          = ["http://${module.carshub_frontend_service_lb.ip_address}"]
       max_age_seconds = 3600
       method          = ["GET", "POST", "PUT", "DELETE"]
       response_header = ["*"]
@@ -226,82 +198,60 @@ module "carshub_media_bucket" {
   uniform_bucket_level_access = true
 }
 
-# module "carshub_media_bucket_backup" {
-#   source   = "./modules/gcs"
-#   location = var.backup_location
-#   name     = "carshub-media-backup"
-#   cors = [
-#     {
-#       origin          = [module.carshub_frontend_service_lb.ip_address]
-#       max_age_seconds = 3600
-#       method          = ["GET", "POST", "PUT", "DELETE"]
-#       response_header = ["*"]
-#     }
-#   ]
-#   versioning = true
-#   contents = [
-#     {
-#       name        = "images/"
-#       content     = " "
-#       source_path = ""
-#     },
-#     {
-#       name        = "documents/"
-#       content     = " "
-#       source_path = ""
-#     }
-#   ]
-#   lifecycle_rules = [
-#     {
-#       condition = {
-#         age = 1
-#       }
-#       action = {
-#         type          = "AbortIncompleteMultipartUpload"
-#         storage_class = null
-#       }
-#     },
-#     {
-#       condition = {
-#         age = 1095
-#       }
-#       action = {
-#         storage_class = "ARCHIVE"
-#         type          = "SetStorageClass"
-#       }
-#     }
-#   ]
-#   notifications = [
-#     {
-#       topic_id = module.carshub_media_bucket_pubsub.topic_id
-#     }
-#   ]
-#   force_destroy               = true
-#   uniform_bucket_level_access = true
-# }
+module "carshub_media_bucket_backup" {
+  source   = "./modules/gcs"
+  location = var.backup_location
+  name     = "carshub-media-backup"
+  cors = [
+    {
+      origin          = [module.carshub_frontend_service_lb.ip_address]
+      max_age_seconds = 3600
+      method          = ["GET", "POST", "PUT", "DELETE"]
+      response_header = ["*"]
+    }
+  ]
+  versioning = true
+  contents = [
+    {
+      name        = "images/"
+      content     = " "
+      source_path = ""
+    },
+    {
+      name        = "documents/"
+      content     = " "
+      source_path = ""
+    }
+  ]
+  lifecycle_rules = [
+    {
+      condition = {
+        age = 1
+      }
+      action = {
+        type          = "AbortIncompleteMultipartUpload"
+        storage_class = null
+      }
+    },
+    {
+      condition = {
+        age = 1095
+      }
+      action = {
+        storage_class = "ARCHIVE"
+        type          = "SetStorageClass"
+      }
+    }
+  ]
+  notifications = [
+    # {
+    #   topic_id = module.carshub_media_bucket_pubsub.topic_id
+    # }
+  ]
+  force_destroy               = true
+  uniform_bucket_level_access = true
+}
 
-
-# resource "google_storage_bucket_iam_member" "source_bucket_iam" {
-#   bucket     = module.carshub_media_bucket.bucket_name
-#   role       = "roles/storage.admin"
-#   member     = "serviceAccount:${data.google_storage_transfer_project_service_account.default.email}"
-#   depends_on = [module.carshub_media_bucket]
-# }
-
-# resource "google_storage_bucket_iam_member" "destination_bucket_iam" {
-#   bucket     = module.carshub_media_bucket.bucket_name
-#   role       = "roles/storage.admin"
-#   member     = "serviceAccount:${data.google_storage_transfer_project_service_account.default.email}"
-#   depends_on = [module.carshub_media_bucket_backup]
-# }
-
-# # Carshub Media Bucket Replication
-# module "carshub_media_bucket_replication" {
-#   source        = "./modules/gcs_replication"
-#   source_bucket = module.carshub_media_bucket.bucket_name
-#   dest_bucket   = module.carshub_media_bucket.bucket_name
-#   depends_on    = [google_storage_bucket_iam_member.destination_bucket_iam, google_storage_bucket_iam_member.source_bucket_iam]
-# }
 
 module "carshub_media_bucket_code" {
   source   = "./modules/gcs"
@@ -415,7 +365,18 @@ module "carshub_frontend_service" {
   ]
   containers = [
     {
-      env           = []
+      env = [
+        # {
+        #   name         = "BASE_URL"
+        #   value        = "http://${module.carshub_backend_service_lb.ip_address}"
+        #   value_source = []
+        # },
+        # {
+        #   name         = "CDN_URL"
+        #   value        = "${module.carshub_cdn.cdn_ip_address}"
+        #   value_source = []
+        # },
+      ]
       volume_mounts = []
       image         = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-frontend/carshub-frontend:latest"
     }

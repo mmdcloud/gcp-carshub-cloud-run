@@ -1,4 +1,4 @@
 .terraform*
 terraform.*
-infra/code
+infra/backend-code
 infra/frontend-code
