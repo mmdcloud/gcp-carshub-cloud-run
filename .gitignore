@@ -1,4 +1,13 @@
-.terraform*
-terraform.*
-infra/backend-code
-infra/frontend-code
+infra/environments/dev/backend-code
+infra/environments/dev/frontend-code
+infra/environments/dev/.terraform
+infra/environments/dev/terraform.*
+infra/environments/prod/backend-code
+infra/environments/prod/frontend-code
+infra/environments/prod/.terraform
+infra/environments/prod/terraform.*
+infra/environments/staging/backend-code
+infra/environments/staging/frontend-code
+infra/environments/staging/.terraform
+infra/environments/staging/terraform.*
+.gitignore
