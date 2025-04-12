@@ -12,6 +12,8 @@ data "google_storage_project_service_account" "carshub_gcs_account" {}
 module "carshub_apis" {
   source = "../../modules/apis"
   apis = [
+    "servicenetworking.googleapis.com",
+    "vpcaccess.googleapis.com",
     "compute.googleapis.com",
     "secretmanager.googleapis.com",
     "artifactregistry.googleapis.com",
@@ -130,7 +132,7 @@ module "carshub_frontend_artifact_registry" {
   location      = var.location
   description   = "CarHub frontend repository"
   repository_id = "carshub-frontend"
-  shell_command = "bash ${path.cwd}/../frontend/artifact_push.sh http://${module.carshub_backend_service_lb.ip_address} ${module.carshub_cdn.cdn_ip_address}"
+  shell_command = "bash ${path.cwd}/../../../frontend/artifact_push.sh http://${module.carshub_backend_service_lb.ip_address} ${module.carshub_cdn.cdn_ip_address}"
   depends_on    = [module.carshub_backend_service, module.carshub_apis]
 }
 
@@ -139,7 +141,7 @@ module "carshub_backend_artifact_registry" {
   location      = var.location
   description   = "CarHub backend repository"
   repository_id = "carshub-backend"
-  shell_command = "bash ${path.cwd}/../backend/api/artifact_push.sh"
+  shell_command = "bash ${path.cwd}/../../../backend/api/artifact_push.sh"
   depends_on    = [module.carshub_db, module.carshub_apis]
 }
 
@@ -261,7 +263,7 @@ module "carshub_media_bucket_code" {
   contents = [
     {
       name        = "code.zip"
-      source_path = "${path.root}/files/code.zip"
+      source_path = "${path.root}/../../files/code.zip"
       content     = ""
     }
   ]

@@ -12,6 +12,8 @@ data "google_storage_project_service_account" "carshub_gcs_account" {}
 module "carshub_apis" {
   source = "../../modules/apis"
   apis = [
+    "servicenetworking.googleapis.com",
+    "vpcaccess.googleapis.com",
     "compute.googleapis.com",
     "secretmanager.googleapis.com",
     "artifactregistry.googleapis.com",
