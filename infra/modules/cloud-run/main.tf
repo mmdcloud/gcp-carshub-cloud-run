@@ -9,6 +9,7 @@ resource "google_cloud_run_v2_service" "cloud_run_service" {
   ingress             = var.ingress
   template {
     service_account = var.service_account
+    max_instance_request_concurrency = var.max_instance_request_concurrency
     scaling {
       max_instance_count = var.max_instance_count
       min_instance_count = var.min_instance_count
@@ -26,10 +27,14 @@ resource "google_cloud_run_v2_service" "cloud_run_service" {
       connector = var.vpc_connector_name
       egress    = "ALL_TRAFFIC"
     }
-    dynamic "containers" {
+    dynamic "containers" {      
       for_each = var.containers
       content {
         image = containers.value["image"]
+        resources {          
+          cpu_idle = containers.value["cpu_idle"]
+          startup_cpu_boost = containers.value["startup_cpu_boost"]
+        }
         ports {
           container_port = local.port
         }

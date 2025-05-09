@@ -3,6 +3,7 @@ variable "location" {}
 variable "deletion_protection" {}
 variable "ingress" {}
 variable "min_instance_count" {}
+variable "max_instance_request_concurrency" {}
 variable "max_instance_count" {}
 variable "traffic" {
   type = list(object({
@@ -21,6 +22,8 @@ variable "volumes" {
 variable "containers" {
   type = list(object({
     image = string
+    cpu_idle = bool
+    startup_cpu_boost = bool
     env = list(object({
       name  = string
       value = string

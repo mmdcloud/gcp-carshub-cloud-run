@@ -5,6 +5,10 @@ variable "forwarding_scheme" {}
 variable "forwarding_rule_name" {}
 variable "target_proxy_name" {}
 variable "forwarding_port_range" {}
+variable "security_policy" {
+  type    = string
+  default = null
+}
 variable "backends" {
   type = list(object({
     backend = string

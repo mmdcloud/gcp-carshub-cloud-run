@@ -21,12 +21,25 @@ resource "google_sql_database_instance" "db_instance" {
   root_password    = var.password
   settings {
     tier                        = var.tier
+    availability_type           = var.availability_type
+    disk_size                   = var.disk_size
+    disk_type                   = var.disk_type
+    disk_autoresize             = var.disk_autoresize
+    disk_autoresize_limit       = var.disk_autoresize_limit
     deletion_protection_enabled = var.deletion_protection_enabled
+    dynamic "database_flags" {
+      for_each = var.database_flags
+      content {
+        name  = database_flags.value["name"]
+        value = database_flags.value["value"]
+      }
+    }
     dynamic "backup_configuration" {
       for_each = var.backup_configuration
       content {
         enabled                        = backup_configuration.value["enabled"]
         location                       = backup_configuration.value["location"]
+        binary_log_enabled             = backup_configuration.value["binary_log_enabled"]
         start_time                     = backup_configuration.value["start_time"]
         point_in_time_recovery_enabled = backup_configuration.value["point_in_time_recovery_enabled"]
         dynamic "backup_retention_settings" {
@@ -48,7 +61,6 @@ resource "google_sql_database_instance" "db_instance" {
       # }
     }
   }
-
   deletion_protection = false
   depends_on          = [google_service_networking_connection.private_vpc_connection]
 }
@@ -60,8 +72,8 @@ resource "google_sql_database" "db" {
 }
 
 resource "google_sql_user" "db_user" {
-  name     = var.db_user
-  instance = google_sql_database_instance.db_instance.name
+  name        = var.db_user
+  instance    = google_sql_database_instance.db_instance.name
   password = var.password
-  host     = "%"
+  host        = "%"
 }

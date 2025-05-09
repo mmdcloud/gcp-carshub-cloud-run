@@ -33,17 +33,23 @@ module "carshub_vpc" {
   source                  = "../../modules/network/vpc"
   auto_create_subnetworks = false
   vpc_name                = "carshub-vpc"
+  routing_mode            = "REGIONAL"
 }
 
 # Subnets Creation
-module "carshub_subnets" {
-  source = "../../modules/network/subnet"
-  subnets = [
-    {
-      name          = "carshub-subnet"
-      ip_cidr_range = "10.0.1.0/24"
-    }
-  ]
+module "carshub_public_subnets" {
+  source                   = "../../modules/network/subnet"
+  name                     = "carshub-public-subnet"
+  subnets                  = var.public_subnets
+  vpc_id                   = module.carshub_vpc.vpc_id
+  private_ip_google_access = false
+  location                 = var.location
+}
+
+module "carshub_private_subnets" {
+  source                   = "../../modules/network/subnet"
+  name                     = "carshub-private-subnet"
+  subnets                  = var.private_subnets
   vpc_id                   = module.carshub_vpc.vpc_id
   private_ip_google_access = true
   location                 = var.location
@@ -108,7 +114,7 @@ module "carshub_cloud_run_service_account" {
   project_id   = data.google_project.project.project_id
   permissions = [
     "roles/secretmanager.secretAccessor",
-    "roles/storage.admin",
+    "roles/storage.objectAdmin",
     "roles/iam.serviceAccountTokenCreator"
   ]
 }
@@ -200,60 +206,6 @@ module "carshub_media_bucket" {
   uniform_bucket_level_access = true
 }
 
-module "carshub_media_bucket_backup" {
-  source   = "../../modules/gcs"
-  location = var.backup_location
-  name     = "carshub-media-backup"
-  cors = [
-    {
-      origin          = [module.carshub_frontend_service_lb.ip_address]
-      max_age_seconds = 3600
-      method          = ["GET", "POST", "PUT", "DELETE"]
-      response_header = ["*"]
-    }
-  ]
-  versioning = true
-  contents = [
-    {
-      name        = "images/"
-      content     = " "
-      source_path = ""
-    },
-    {
-      name        = "documents/"
-      content     = " "
-      source_path = ""
-    }
-  ]
-  lifecycle_rules = [
-    {
-      condition = {
-        age = 1
-      }
-      action = {
-        type          = "AbortIncompleteMultipartUpload"
-        storage_class = null
-      }
-    },
-    {
-      condition = {
-        age = 1095
-      }
-      action = {
-        storage_class = "ARCHIVE"
-        type          = "SetStorageClass"
-      }
-    }
-  ]
-  notifications = [
-    # {
-    #   topic_id = module.carshub_media_bucket_pubsub.topic_id
-    # }
-  ]
-  force_destroy               = true
-  uniform_bucket_level_access = true
-}
-
 
 module "carshub_media_bucket_code" {
   source   = "../../modules/gcs"
@@ -274,7 +226,7 @@ module "carshub_media_bucket_code" {
 # Cloud storage IAM binding
 resource "google_storage_bucket_iam_binding" "storage_iam_binding" {
   bucket = module.carshub_media_bucket.bucket_name
-  role   = "roles/storage.objectAdmin"
+  role   = "roles/storage.objectViewer"
 
   members = [
     "allUsers"
@@ -315,25 +267,15 @@ module "carshub_db" {
   location                    = var.location
   tier                        = "db-f1-micro"
   ipv4_enabled                = false
+  availability_type           = "ZONAL"
+  disk_size                   = 10
   deletion_protection_enabled = false
-  backup_configuration = [
-    {
-      enabled                        = true
-      start_time                     = "03:00"
-      location                       = var.location
-      point_in_time_recovery_enabled = false
-      backup_retention_settings = [
-        {
-          retained_backups = 7
-          retention_unit   = "COUNT"
-        }
-      ]
-    }
-  ]
-  vpc_self_link = module.carshub_vpc.self_link
-  vpc_id        = module.carshub_vpc.vpc_id
-  password      = module.carshub_sql_password_secret.secret_data
-  depends_on    = [module.carshub_sql_password_secret]
+  backup_configuration        = []
+  vpc_self_link               = module.carshub_vpc.self_link
+  vpc_id                      = module.carshub_vpc.vpc_id
+  password                    = module.carshub_sql_password_secret.secret_data
+  depends_on                  = [module.carshub_sql_password_secret]
+  database_flags              = []
 }
 
 # Cloud Run
@@ -349,16 +291,17 @@ module "carshub_run_iam_permissions" {
 
 # Cloud Run Frontend Service
 module "carshub_frontend_service" {
-  source              = "../../modules/cloud-run"
-  deletion_protection = false
-  ingress             = "INGRESS_TRAFFIC_ALL"
-  vpc_connector_name  = module.carshub_vpc_connectors.vpc_connectors[0].id
-  service_account     = module.carshub_cloud_run_service_account.sa_email
-  location            = var.location
-  min_instance_count  = 1
-  max_instance_count  = 2
-  name                = "carshub-frontend-service"
-  volumes             = []
+  source                           = "../../modules/cloud-run"
+  deletion_protection              = false
+  ingress                          = "INGRESS_TRAFFIC_ALL"
+  vpc_connector_name               = module.carshub_vpc_connectors.vpc_connectors[0].id
+  service_account                  = module.carshub_cloud_run_service_account.sa_email
+  location                         = var.location
+  min_instance_count               = 0
+  max_instance_count               = 3
+  max_instance_request_concurrency = 3
+  name                             = "carshub-frontend-service"
+  volumes                          = []
   traffic = [
     {
       traffic_type         = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
@@ -367,20 +310,11 @@ module "carshub_frontend_service" {
   ]
   containers = [
     {
-      env = [
-        # {
-        #   name         = "BASE_URL"
-        #   value        = "http://${module.carshub_backend_service_lb.ip_address}"
-        #   value_source = []
-        # },
-        # {
-        #   name         = "CDN_URL"
-        #   value        = "${module.carshub_cdn.cdn_ip_address}"
-        #   value_source = []
-        # },
-      ]
-      volume_mounts = []
-      image         = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-frontend/carshub-frontend:latest"
+      env               = []
+      volume_mounts     = []
+      cpu_idle          = false
+      startup_cpu_boost = false
+      image             = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-frontend/carshub-frontend:latest"
     }
   ]
   depends_on = [module.carshub_frontend_artifact_registry, module.carshub_apis, module.carshub_cloud_run_service_account]
@@ -388,14 +322,15 @@ module "carshub_frontend_service" {
 
 # Cloud Run Backend Service
 module "carshub_backend_service" {
-  source              = "../../modules/cloud-run"
-  deletion_protection = false
-  vpc_connector_name  = module.carshub_vpc_connectors.vpc_connectors[0].id
-  ingress             = "INGRESS_TRAFFIC_ALL"
-  service_account     = module.carshub_cloud_run_service_account.sa_email
-  location            = var.location
-  min_instance_count  = 1
-  max_instance_count  = 2
+  source                           = "../../modules/cloud-run"
+  deletion_protection              = false
+  vpc_connector_name               = module.carshub_vpc_connectors.vpc_connectors[0].id
+  ingress                          = "INGRESS_TRAFFIC_ALL"
+  service_account                  = module.carshub_cloud_run_service_account.sa_email
+  location                         = var.location
+  min_instance_count               = 0
+  max_instance_count               = 3
+  max_instance_request_concurrency = 3
   volumes = [
     {
       name               = "cloudsql"
@@ -411,7 +346,9 @@ module "carshub_backend_service" {
   ]
   containers = [
     {
-      image = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-backend/carshub-backend:latest"
+      image             = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-backend/carshub-backend:latest"
+      cpu_idle          = false
+      startup_cpu_boost = false
       volume_mounts = [
         {
           name       = "cloudsql"
@@ -471,7 +408,7 @@ module "carshub_media_update_function" {
   ingress_settings                    = "ALLOW_INTERNAL_ONLY"
   function_app_service_account_email  = module.carshub_function_app_service_account.sa_email
   max_instance_count                  = 3
-  min_instance_count                  = 1
+  min_instance_count                  = 0
   available_memory                    = "256M"
   timeout_seconds                     = 60
   event_trigger_event_type            = "google.cloud.pubsub.topic.v1.messagePublished"

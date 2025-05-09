@@ -3,7 +3,7 @@ resource "google_compute_backend_service" "backend" {
   name        = var.backend_service_name
   protocol    = var.backend_service_protocol
   timeout_sec = var.backend_service_timeout
-  
+  security_policy = var.security_policy
   dynamic "backend" {
     for_each = var.backends
     content {
