@@ -1,16 +1,16 @@
 variable "name" {}
 variable "description" {}
 variable "rules" {
+  description = "List of rules to be added to the security policy"
   type = list(object({
-    action   = string
-    priority = number
-    match = object({
-      expression       = string
-      versioned_expr   = string
-    })
+    priority      = number
+    action        = string
+    description   = string
     src_ip_ranges = list(string)
-    description = string
+    expression    = string
+    preview       = bool
   }))
+  default = []
 }
 # variable "rate_limit_options" {
 #   type = object({

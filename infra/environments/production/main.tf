@@ -119,62 +119,39 @@ module "carshub_cloud_run_service_account" {
 }
 
 # Cloud Armor WAF protection for Load Balancers
-module "carshub_cloud_armor" {
-  source      = "./../../modules/network_security/cloud_armor"
-  name        = "carshub-security-policy"
-  description = "WAF security policy for CarsHub applications"
-  rules = [
-    {
-      action   = "allow"
-      priority = "2147483647"
-      match = {
-        versioned_expr = "SRC_IPS_V1"
-        expression     = ""
-      }
-      src_ip_ranges = ["*"]
-      description   = "Default rule, allows all traffic"
-    },
-    {
-      action   = "deny(403)"
-      priority = "1000"
-      match = {
-        versioned_expr = null
-        expression     = "evaluatePreconfiguredExpr('xss-stable')"
-      }
-      src_ip_ranges = ["*"]
-      description   = "Block XSS attacks"
-    },
-    {
-      action   = "deny(403)"
-      priority = "1001"
-      match = {
-        versioned_expr = null
-        expression     = "evaluatePreconfiguredExpr('sqli-stable')"
-      }
-      src_ip_ranges = ["*"]
-      description   = "Block SQL injection attacks"
-    },
-    {
-      action   = "deny(403)"
-      priority = "1002"
-      match = {
-        versioned_expr = null
-        expression     = "evaluatePreconfiguredExpr('scanner-detection-stable')"
-      }
-      src_ip_ranges = ["*"]
-      description   = "Block scanner detection"
-    },
-    {
-      action   = "deny(403)"
-      priority = "1003"
-      match = {
-        versioned_expr = null
-        expression     = "evaluatePreconfiguredExpr('protocol-attack-stable')"
-      }
-      src_ip_ranges = ["*"]
-      description   = "Block protocol attacks"
+module "cloud_armor" {
+  source  = "GoogleCloudPlatform/cloud-armor/google"
+  version = "~> 5.0"
+
+  project_id                           = var.project_id
+  name                                 = "test-casp-policy"
+  description                          = "Test Cloud Armor security policy with preconfigured rules, security rules and custom rules"
+  default_rule_action                  = "allow"
+  type                                 = "CLOUD_ARMOR"
+  layer_7_ddos_defense_enable          = true
+  layer_7_ddos_defense_rule_visibility = "STANDARD"
+  user_ip_request_headers              = ["True-Client-IP", ]
+
+  # preconfigured WAF rules
+  pre_configured_rules = {
+    "xss-stable_level_2_with_exclude" = {
+      action                  = "deny(502)"
+      priority                = 2
+      preview                 = true
+      target_rule_set         = "xss-v33-stable"
+      sensitivity_level       = 2
+      exclude_target_rule_ids = ["owasp-crs-v030301-id941380-xss", "owasp-crs-v030301-id941280-xss"]
     }
-  ]
+
+    "php-stable_level_0_with_include" = {
+      action                  = "deny(502)"
+      priority                = 3
+      description             = "PHP Sensitivity Level 0 with included rules"
+      target_rule_set         = "php-v33-stable"
+      include_target_rule_ids = ["owasp-crs-v030301-id933190-php", "owasp-crs-v030301-id933111-php"]
+    }
+
+  }  
 }
 
 // Creating a Pub/Sub topic.
@@ -448,18 +425,7 @@ module "carshub_frontend_service" {
   ]
   containers = [
     {
-      env = [
-        # {
-        #   name         = "BASE_URL"
-        #   value        = "http://${module.carshub_backend_service_lb.ip_address}"
-        #   value_source = []
-        # },
-        # {
-        #   name         = "CDN_URL"
-        #   value        = "${module.carshub_cdn.cdn_ip_address}"
-        #   value_source = []
-        # },
-      ]
+      env               = []
       volume_mounts     = []
       cpu_idle          = true
       startup_cpu_boost = true
@@ -598,7 +564,7 @@ module "carshub_frontend_service_lb" {
   backend_service_name     = "carshub-frontend-compute"
   backend_service_protocol = "HTTP"
   backend_service_timeout  = 30
-  security_policy          = module.carshub_cloud_armor.id
+  security_policy          = module.cloud_armor.policy.id
   backends = [
     {
       backend = module.carshub_frontend_service_neg.id
@@ -620,7 +586,7 @@ module "carshub_backend_service_lb" {
   backend_service_name     = "carshub-backend-compute"
   backend_service_protocol = "HTTP"
   backend_service_timeout  = 30
-  security_policy          = module.carshub_cloud_armor.id
+  security_policy          = module.cloud_armor.policy.id
   backends = [
     {
       backend = module.carshub_backend_service_neg.id
