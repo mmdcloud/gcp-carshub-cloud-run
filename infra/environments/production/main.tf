@@ -82,6 +82,7 @@ module "carshub_function_app_service_account" {
   account_id   = "carshub-service-account"
   display_name = "CarsHub Service Account"
   project_id   = data.google_project.project.project_id
+  member_prefix = "serviceAccount"
   permissions = [
     "roles/run.invoker",
     "roles/eventarc.eventReceiver",
@@ -97,6 +98,7 @@ module "carshub_cloudbuild_service_account" {
   account_id   = "carshub-cloudbuild-sa"
   display_name = "CarsHub Cloudbuild Service Account"
   project_id   = data.google_project.project.project_id
+  member_prefix = "serviceAccount"
   permissions = [
     "roles/run.developer",
     "roles/logging.logWriter",
@@ -111,6 +113,7 @@ module "carshub_cloud_run_service_account" {
   account_id   = "carshub-cloud-run-sa"
   display_name = "CarsHub Cloud Run Service Account"
   project_id   = data.google_project.project.project_id
+  member_prefix = "serviceAccount"
   permissions = [
     "roles/secretmanager.secretAccessor",
     "roles/storage.admin",
@@ -173,7 +176,7 @@ module "carshub_frontend_artifact_registry" {
   location      = var.location
   description   = "CarHub frontend repository"
   repository_id = "carshub-frontend"
-  shell_command = "bash ${path.cwd}/../../../frontend/artifact_push.sh http://${module.carshub_backend_service_lb.ip_address} ${module.carshub_cdn.cdn_ip_address}"
+  shell_command = "bash ${path.cwd}/../../../frontend/artifact_push.sh http://${module.carshub_backend_service_lb.ip_address} ${module.carshub_cdn.cdn_ip_address} ${data.google_project.project.project_id}"
   depends_on    = [module.carshub_backend_service, module.carshub_apis]
 }
 
@@ -182,7 +185,7 @@ module "carshub_backend_artifact_registry" {
   location      = var.location
   description   = "CarHub backend repository"
   repository_id = "carshub-backend"
-  shell_command = "bash ${path.cwd}/../../../backend/api/artifact_push.sh"
+  shell_command = "bash ${path.cwd}/../../../backend/api/artifact_push.sh ${data.google_project.project.project_id}"
   depends_on    = [module.carshub_db, module.carshub_apis]
 }
 
@@ -605,6 +608,9 @@ module "carshub_cloudbuild_frontend_trigger" {
   source_ref      = "frontend"
   repo_type       = "GITHUB"
   filename        = "cloudbuild.yaml"
+  substitutions = {
+    Project_ID = "encoded-alpha-457108-e8"
+  }
   service_account = module.carshub_cloudbuild_service_account.id
 }
 
@@ -617,5 +623,8 @@ module "carshub_cloudbuild_backend_trigger" {
   source_ref      = "backend"
   repo_type       = "GITHUB"
   filename        = "cloudbuild.yaml"
+  substitutions = {
+    Project_ID = "encoded-alpha-457108-e8"
+  }
   service_account = module.carshub_cloudbuild_service_account.id
 }

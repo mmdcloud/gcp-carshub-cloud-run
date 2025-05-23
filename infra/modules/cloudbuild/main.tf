@@ -4,7 +4,8 @@ resource "google_cloudbuild_trigger" "cloudbuild_trigger" {
   trigger_template {
     branch_name = var.source_ref
     repo_name = var.repo_name    
-  }
+  }  
+  substitutions = var.substitutions
   filename = var.filename
   # source_to_build {
   #   uri       = var.source_uri
