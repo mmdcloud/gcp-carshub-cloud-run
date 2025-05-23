@@ -491,6 +491,9 @@ module "carshub_cloudbuild_frontend_trigger" {
   source_ref      = "frontend"
   repo_type       = "GITHUB"
   filename        = "cloudbuild.yaml"
+  substitutions = {
+    _PROJECT_ID = "${data.google_project.project.project_id}"
+  }
   service_account = module.carshub_cloudbuild_service_account.id
 }
 
@@ -503,5 +506,8 @@ module "carshub_cloudbuild_backend_trigger" {
   source_ref      = "backend"
   repo_type       = "GITHUB"
   filename        = "cloudbuild.yaml"
+  substitutions = {
+    _PROJECT_ID = "${data.google_project.project.project_id}"
+  }
   service_account = module.carshub_cloudbuild_service_account.id
 }

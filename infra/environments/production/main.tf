@@ -609,7 +609,7 @@ module "carshub_cloudbuild_frontend_trigger" {
   repo_type       = "GITHUB"
   filename        = "cloudbuild.yaml"
   substitutions = {
-    Project_ID = "encoded-alpha-457108-e8"
+    _PROJECT_ID = "${data.google_project.project.project_id}"
   }
   service_account = module.carshub_cloudbuild_service_account.id
 }
@@ -624,7 +624,7 @@ module "carshub_cloudbuild_backend_trigger" {
   repo_type       = "GITHUB"
   filename        = "cloudbuild.yaml"
   substitutions = {
-    Project_ID = "encoded-alpha-457108-e8"
+    _PROJECT_ID = "${data.google_project.project.project_id}"
   }
   service_account = module.carshub_cloudbuild_service_account.id
 }
