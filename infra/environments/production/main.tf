@@ -88,8 +88,8 @@ module "carshub_function_app_service_account" {
     "roles/eventarc.eventReceiver",
     "roles/cloudsql.client",
     "roles/artifactregistry.reader",
-    "roles/secretmanager.admin",
-    "roles/pubsub.admin"
+    "roles/secretmanager.secretaccessor",
+    "roles/pubsub.publisher"
   ]
 }
 
@@ -134,7 +134,7 @@ module "cloud_armor" {
   layer_7_ddos_defense_enable          = true
   layer_7_ddos_defense_rule_visibility = "STANDARD"
   user_ip_request_headers              = ["True-Client-IP", ]
-
+  
   # preconfigured WAF rules
   pre_configured_rules = {
     "xss-stable_level_2_with_exclude" = {
@@ -243,61 +243,6 @@ module "carshub_media_bucket" {
   force_destroy               = true
   uniform_bucket_level_access = true
 }
-
-module "carshub_media_bucket_backup" {
-  source   = "../../modules/gcs"
-  location = var.backup_location
-  name     = "carshub-media-backup"
-  cors = [
-    {
-      origin          = [module.carshub_frontend_service_lb.ip_address]
-      max_age_seconds = 3600
-      method          = ["GET", "POST", "PUT", "DELETE"]
-      response_header = ["*"]
-    }
-  ]
-  versioning = true
-  contents = [
-    {
-      name        = "images/"
-      content     = " "
-      source_path = ""
-    },
-    {
-      name        = "documents/"
-      content     = " "
-      source_path = ""
-    }
-  ]
-  lifecycle_rules = [
-    {
-      condition = {
-        age = 1
-      }
-      action = {
-        type          = "AbortIncompleteMultipartUpload"
-        storage_class = null
-      }
-    },
-    {
-      condition = {
-        age = 1095
-      }
-      action = {
-        storage_class = "ARCHIVE"
-        type          = "SetStorageClass"
-      }
-    }
-  ]
-  notifications = [
-    # {
-    #   topic_id = module.carshub_media_bucket_pubsub.topic_id
-    # }
-  ]
-  force_destroy               = true
-  uniform_bucket_level_access = true
-}
-
 
 module "carshub_media_bucket_code" {
   source   = "../../modules/gcs"

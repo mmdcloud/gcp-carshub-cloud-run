@@ -79,26 +79,27 @@ module "carshub_vpc_connectors" {
 
 # Service Account
 module "carshub_function_app_service_account" {
-  source       = "../../modules/service-account"
-  account_id   = "carshub-service-account"
-  display_name = "CarsHub Service Account"
+  source        = "../../modules/service-account"
+  account_id    = "carshub-service-account"
+  display_name  = "CarsHub Service Account"
+  project_id    = data.google_project.project.project_id
   member_prefix = "serviceAccount"
-  project_id   = data.google_project.project.project_id
   permissions = [
+    "roles/iam.serviceAccountUser",
     "roles/run.invoker",
     "roles/eventarc.eventReceiver",
     "roles/cloudsql.client",
     "roles/artifactregistry.reader",
     "roles/secretmanager.admin",
-    "roles/pubsub.admin"
+    "roles/pubsub.publisher"
   ]
 }
 
 module "carshub_cloudbuild_service_account" {
-  source       = "../../modules/service-account"
-  account_id   = "carshub-cloudbuild-sa"
-  display_name = "CarsHub Cloudbuild Service Account"
-  project_id   = data.google_project.project.project_id
+  source        = "../../modules/service-account"
+  account_id    = "carshub-cloudbuild-sa"
+  display_name  = "CarsHub Cloudbuild Service Account"
+  project_id    = data.google_project.project.project_id
   member_prefix = "serviceAccount"
   permissions = [
     "roles/run.developer",
@@ -110,11 +111,11 @@ module "carshub_cloudbuild_service_account" {
 }
 
 module "carshub_cloud_run_service_account" {
-  source       = "../../modules/service-account"
-  account_id   = "carshub-cloud-run-sa"
-  display_name = "CarsHub Cloud Run Service Account"
+  source        = "../../modules/service-account"
+  account_id    = "carshub-cloud-run-sa"
+  display_name  = "CarsHub Cloud Run Service Account"
+  project_id    = data.google_project.project.project_id
   member_prefix = "serviceAccount"
-  project_id   = data.google_project.project.project_id
   permissions = [
     "roles/secretmanager.secretAccessor",
     "roles/storage.objectAdmin",
@@ -278,7 +279,7 @@ module "carshub_db" {
   vpc_id                      = module.carshub_vpc.vpc_id
   password                    = module.carshub_sql_password_secret.secret_data
   depends_on                  = [module.carshub_sql_password_secret]
-  database_flags = []
+  database_flags              = []
 }
 
 # Cloud Run
@@ -294,17 +295,17 @@ module "carshub_run_iam_permissions" {
 
 # Cloud Run Frontend Service
 module "carshub_frontend_service" {
-  source              = "../../modules/cloud-run"
-  deletion_protection = false
-  ingress             = "INGRESS_TRAFFIC_ALL"
-  vpc_connector_name  = module.carshub_vpc_connectors.vpc_connectors[0].id
-  service_account     = module.carshub_cloud_run_service_account.sa_email
-  location            = var.location
-  min_instance_count  = 0
-  max_instance_count  = 3
+  source                           = "../../modules/cloud-run"
+  deletion_protection              = false
+  ingress                          = "INGRESS_TRAFFIC_ALL"
+  vpc_connector_name               = module.carshub_vpc_connectors.vpc_connectors[0].id
+  service_account                  = module.carshub_cloud_run_service_account.sa_email
+  location                         = var.location
+  min_instance_count               = 0
+  max_instance_count               = 3
   max_instance_request_concurrency = 3
-  name                = "carshub-frontend-service"
-  volumes             = []
+  name                             = "carshub-frontend-service"
+  volumes                          = []
   traffic = [
     {
       traffic_type         = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
@@ -313,11 +314,11 @@ module "carshub_frontend_service" {
   ]
   containers = [
     {
-      env           = []
-      volume_mounts = []
-      cpu_idle = false
+      env               = []
+      volume_mounts     = []
+      cpu_idle          = false
       startup_cpu_boost = false
-      image         = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-frontend/carshub-frontend:latest"
+      image             = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-frontend/carshub-frontend:latest"
     }
   ]
   depends_on = [module.carshub_frontend_artifact_registry, module.carshub_apis, module.carshub_cloud_run_service_account]
@@ -325,14 +326,14 @@ module "carshub_frontend_service" {
 
 # Cloud Run Backend Service
 module "carshub_backend_service" {
-  source              = "../../modules/cloud-run"
-  deletion_protection = false
-  vpc_connector_name  = module.carshub_vpc_connectors.vpc_connectors[0].id
-  ingress             = "INGRESS_TRAFFIC_ALL"
-  service_account     = module.carshub_cloud_run_service_account.sa_email
-  location            = var.location
-  min_instance_count  = 0
-  max_instance_count  = 3
+  source                           = "../../modules/cloud-run"
+  deletion_protection              = false
+  vpc_connector_name               = module.carshub_vpc_connectors.vpc_connectors[0].id
+  ingress                          = "INGRESS_TRAFFIC_ALL"
+  service_account                  = module.carshub_cloud_run_service_account.sa_email
+  location                         = var.location
+  min_instance_count               = 0
+  max_instance_count               = 3
   max_instance_request_concurrency = 3
   volumes = [
     {
@@ -349,8 +350,8 @@ module "carshub_backend_service" {
   ]
   containers = [
     {
-      image = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-backend/carshub-backend:latest"
-      cpu_idle = false
+      image             = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-backend/carshub-backend:latest"
+      cpu_idle          = false
       startup_cpu_boost = false
       volume_mounts = [
         {
@@ -483,14 +484,14 @@ module "carshub_backend_service_lb" {
 
 # CloudBuild configuration
 module "carshub_cloudbuild_frontend_trigger" {
-  source          = "../../modules/cloudbuild"
-  trigger_name    = "carshub-frontend-trigger"
-  location        = var.location
-  repo_name       = "mmdcloud-carshub-gcp-cloud-run"
-  source_uri      = "https://github.com/mmdcloud/carshub-gcp-cloud-run"
-  source_ref      = "frontend"
-  repo_type       = "GITHUB"
-  filename        = "cloudbuild.yaml"
+  source       = "../../modules/cloudbuild"
+  trigger_name = "carshub-frontend-trigger"
+  location     = var.location
+  repo_name    = "mmdcloud-carshub-gcp-cloud-run"
+  source_uri   = "https://github.com/mmdcloud/carshub-gcp-cloud-run"
+  source_ref   = "frontend"
+  repo_type    = "GITHUB"
+  filename     = "cloudbuild.yaml"
   substitutions = {
     _PROJECT_ID = "${data.google_project.project.project_id}"
   }
@@ -498,14 +499,14 @@ module "carshub_cloudbuild_frontend_trigger" {
 }
 
 module "carshub_cloudbuild_backend_trigger" {
-  source          = "../../modules/cloudbuild"
-  trigger_name    = "carshub-backend-trigger"
-  location        = var.location
-  repo_name       = "mmdcloud-carshub-gcp-cloud-run"
-  source_uri      = "https://github.com/mmdcloud/carshub-gcp-cloud-run"
-  source_ref      = "backend"
-  repo_type       = "GITHUB"
-  filename        = "cloudbuild.yaml"
+  source       = "../../modules/cloudbuild"
+  trigger_name = "carshub-backend-trigger"
+  location     = var.location
+  repo_name    = "mmdcloud-carshub-gcp-cloud-run"
+  source_uri   = "https://github.com/mmdcloud/carshub-gcp-cloud-run"
+  source_ref   = "backend"
+  repo_type    = "GITHUB"
+  filename     = "cloudbuild.yaml"
   substitutions = {
     _PROJECT_ID = "${data.google_project.project.project_id}"
   }

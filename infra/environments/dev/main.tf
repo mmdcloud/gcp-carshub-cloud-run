@@ -91,7 +91,7 @@ module "carshub_function_app_service_account" {
     "roles/cloudsql.client",
     "roles/artifactregistry.reader",
     "roles/secretmanager.admin",
-    "roles/pubsub.admin"
+    "roles/pubsub.publisher"
   ]
 }
 
