@@ -78,26 +78,26 @@ module "carshub_vpc_connectors" {
 
 # Service Account
 module "carshub_function_app_service_account" {
-  source       = "../../modules/service-account"
-  account_id   = "carshub-service-account"
-  display_name = "CarsHub Service Account"
-  project_id   = data.google_project.project.project_id
+  source        = "../../modules/service-account"
+  account_id    = "carshub-service-account"
+  display_name  = "CarsHub Service Account"
+  project_id    = data.google_project.project.project_id
   member_prefix = "serviceAccount"
   permissions = [
     "roles/run.invoker",
     "roles/eventarc.eventReceiver",
     "roles/cloudsql.client",
     "roles/artifactregistry.reader",
-    "roles/secretmanager.secretaccessor",
+    "roles/secretmanager.admin",
     "roles/pubsub.publisher"
   ]
 }
 
 module "carshub_cloudbuild_service_account" {
-  source       = "../../modules/service-account"
-  account_id   = "carshub-cloudbuild-sa"
-  display_name = "CarsHub Cloudbuild Service Account"
-  project_id   = data.google_project.project.project_id
+  source        = "../../modules/service-account"
+  account_id    = "carshub-cloudbuild-sa"
+  display_name  = "CarsHub Cloudbuild Service Account"
+  project_id    = data.google_project.project.project_id
   member_prefix = "serviceAccount"
   permissions = [
     "roles/run.developer",
@@ -109,10 +109,10 @@ module "carshub_cloudbuild_service_account" {
 }
 
 module "carshub_cloud_run_service_account" {
-  source       = "../../modules/service-account"
-  account_id   = "carshub-cloud-run-sa"
-  display_name = "CarsHub Cloud Run Service Account"
-  project_id   = data.google_project.project.project_id
+  source        = "../../modules/service-account"
+  account_id    = "carshub-cloud-run-sa"
+  display_name  = "CarsHub Cloud Run Service Account"
+  project_id    = data.google_project.project.project_id
   member_prefix = "serviceAccount"
   permissions = [
     "roles/secretmanager.secretAccessor",
@@ -134,7 +134,7 @@ module "cloud_armor" {
   layer_7_ddos_defense_enable          = true
   layer_7_ddos_defense_rule_visibility = "STANDARD"
   user_ip_request_headers              = ["True-Client-IP", ]
-  
+
   # preconfigured WAF rules
   pre_configured_rules = {
     "xss-stable_level_2_with_exclude" = {
@@ -154,7 +154,7 @@ module "cloud_armor" {
       include_target_rule_ids = ["owasp-crs-v030301-id933190-php", "owasp-crs-v030301-id933111-php"]
     }
 
-  }  
+  }
 }
 
 // Creating a Pub/Sub topic.
@@ -545,14 +545,14 @@ module "carshub_backend_service_lb" {
 
 # CloudBuild configuration
 module "carshub_cloudbuild_frontend_trigger" {
-  source          = "../../modules/cloudbuild"
-  trigger_name    = "carshub-frontend-trigger"
-  location        = var.location
-  repo_name       = "mmdcloud-carshub-gcp-cloud-run"
-  source_uri      = "https://github.com/mmdcloud/carshub-gcp-cloud-run"
-  source_ref      = "frontend"
-  repo_type       = "GITHUB"
-  filename        = "cloudbuild.yaml"
+  source       = "../../modules/cloudbuild"
+  trigger_name = "carshub-frontend-trigger"
+  location     = var.location
+  repo_name    = "mmdcloud-carshub-gcp-cloud-run"
+  source_uri   = "https://github.com/mmdcloud/carshub-gcp-cloud-run"
+  source_ref   = "frontend"
+  repo_type    = "GITHUB"
+  filename     = "cloudbuild.yaml"
   substitutions = {
     _PROJECT_ID = "${data.google_project.project.project_id}"
   }
@@ -560,14 +560,14 @@ module "carshub_cloudbuild_frontend_trigger" {
 }
 
 module "carshub_cloudbuild_backend_trigger" {
-  source          = "../../modules/cloudbuild"
-  trigger_name    = "carshub-backend-trigger"
-  location        = var.location
-  repo_name       = "mmdcloud-carshub-gcp-cloud-run"
-  source_uri      = "https://github.com/mmdcloud/carshub-gcp-cloud-run"
-  source_ref      = "backend"
-  repo_type       = "GITHUB"
-  filename        = "cloudbuild.yaml"
+  source       = "../../modules/cloudbuild"
+  trigger_name = "carshub-backend-trigger"
+  location     = var.location
+  repo_name    = "mmdcloud-carshub-gcp-cloud-run"
+  source_uri   = "https://github.com/mmdcloud/carshub-gcp-cloud-run"
+  source_ref   = "backend"
+  repo_type    = "GITHUB"
+  filename     = "cloudbuild.yaml"
   substitutions = {
     _PROJECT_ID = "${data.google_project.project.project_id}"
   }
