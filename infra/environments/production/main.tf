@@ -251,8 +251,8 @@ module "carshub_media_bucket_code" {
   cors     = []
   contents = [
     {
-      name        = "code.zip"
-      source_path = "${path.root}/../../files/code.zip"
+      name        = "carshub_media_function_code.zip"
+      source_path = "${path.root}/../../files/carshub_media_function_code.zip"
       content     = ""
     }
   ]

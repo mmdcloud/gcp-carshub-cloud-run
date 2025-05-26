@@ -2,10 +2,10 @@ infra/environments/dev/backend-code
 infra/environments/dev/frontend-code
 infra/environments/dev/.terraform*
 infra/environments/dev/terraform.*
-infra/environments/prod/backend-code
-infra/environments/prod/frontend-code
-infra/environments/prod/.terraform*
-infra/environments/prod/terraform.*
+infra/environments/production/backend-code
+infra/environments/production/frontend-code
+infra/environments/production/.terraform*
+infra/environments/production/terraform.*
 infra/environments/staging/backend-code
 infra/environments/staging/frontend-code
 infra/environments/staging/.terraform*
