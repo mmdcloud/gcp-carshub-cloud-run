@@ -56,9 +56,24 @@ module "carshub_private_subnets" {
 
 # Firewall Creation
 module "carshub_firewall" {
-  source        = "../../modules/network/firewall"
-  firewall_data = []
-  vpc_id        = module.carshub_vpc.vpc_id
+  source = "../../modules/network/firewall"
+  vpc_id = module.carshub_vpc.vpc_id
+  firewall_data = [
+    {
+      firewall_name      = "carshub-allow-frontend-to-backend"
+      firewall_direction = "INGRESS"
+      priority           = 1000
+      source_ranges      = ["${module.carshub_frontend_service_lb.ip_address}"]
+      target_tags        = ["carshub-backend-compute-health-check"]
+      allow_list = [
+        {
+          protocol = "tcp"
+          ports    = ["80"]
+        }
+      ]
+      description = "Allow traffic from frontend LB to backend LB"
+    }
+  ]
 }
 
 # Serverless VPC Creation

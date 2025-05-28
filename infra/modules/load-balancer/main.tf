@@ -12,6 +12,12 @@ resource "google_compute_backend_service" "backend" {
   }
 }
 
+resource "google_compute_http_health_check" "health_check" {
+  name               = "${var.backend_service_name}-health-check"
+  request_path       = "/"
+  port               = 80 
+}
+
 # Reserve an external IP for CDN
 resource "google_compute_global_address" "global_address" {
   name         = var.global_address_name
