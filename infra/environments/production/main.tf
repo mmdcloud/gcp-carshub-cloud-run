@@ -287,12 +287,19 @@ module "carshub_sql_password_secret" {
   depends_on  = [module.carshub_apis]
 }
 
+module "carshub_sql_username_secret" {
+  source      = "../../modules/secret-manager"
+  secret_data = tostring(data.vault_generic_secret.sql.data["username"])
+  secret_id   = "carshub_db_username_secret"
+  depends_on  = [module.carshub_apis]
+}
+
 # Cloud SQL
 module "carshub_db" {
   source                      = "../../modules/cloud-sql"
   name                        = "carshub-db-instance"
   db_name                     = "carshub"
-  db_user                     = "mohit"
+  db_user                     = module.carshub_sql_username_secret.secret_data
   db_version                  = "MYSQL_8_0"
   location                    = var.location
   tier                        = "db-custom-4-15360"
@@ -326,6 +333,14 @@ module "carshub_db" {
     {
       name  = "skip_show_database"
       value = "on"
+    },
+    {
+      name  = "innodb_buffer_pool_size"
+      value = "20GB"
+    },
+    {
+      name  = "query_cache_size"
+      value = "256MB"
     }
   ]
   vpc_self_link = module.carshub_vpc.self_link
@@ -381,7 +396,7 @@ module "carshub_backend_service" {
   source                           = "../../modules/cloud-run"
   deletion_protection              = false
   vpc_connector_name               = module.carshub_vpc_connectors.vpc_connectors[0].id
-  ingress                          = "INGRESS_TRAFFIC_ALL"
+  ingress                          = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
   service_account                  = module.carshub_cloud_run_service_account.sa_email
   location                         = var.location
   min_instance_count               = 2
@@ -578,7 +593,7 @@ module "frontend_uptime_check" {
   http_request_method = "GET"
   http_validate_ssl   = false
   resource_type       = "uptime_url"
-  resource_host       = module.frontend_lb.address
+  resource_host       = module.carshub_frontend_service_lb.ip_address
   checker_type        = "STATIC_IP_CHECKERS"
 }
 
@@ -592,7 +607,7 @@ module "backend_uptime_check" {
   http_request_method = "GET"
   http_validate_ssl   = false
   resource_type       = "uptime_url"
-  resource_host       = module.backend_lb.address
+  resource_host       = module.carshub_backend_service_lb.ip_address
   checker_type        = "STATIC_IP_CHECKERS"
 }
 
@@ -631,15 +646,15 @@ module "http_5xx_errors" {
 }
 
 module "database_connection_errors" {
-  source       = "../../modules/observability/metrics"
-  name         = "database_connection_errors"
-  filter       = <<-EOT
+  source           = "../../modules/observability/metrics"
+  name             = "database_connection_errors"
+  filter           = <<-EOT
     resource.type="cloudsql_database"
     (textPayload:"connection" OR textPayload:"timeout" OR textPayload:"failed")
     severity="ERROR"
   EOT
-  metric_kind  = "DELTA"
-  value_type   = "INT64"
-  display_name = "Database Connection Errors"
-   label_extractors = {}
+  metric_kind      = "DELTA"
+  value_type       = "INT64"
+  display_name     = "Database Connection Errors"
+  label_extractors = {}
 }

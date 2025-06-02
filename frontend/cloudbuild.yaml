@@ -30,6 +30,8 @@ steps:
       - "us-central1"
       - "--platform"
       - "managed"
+      - "--port"
+      - "3000"
       - "--allow-unauthenticated"
 
 images:
