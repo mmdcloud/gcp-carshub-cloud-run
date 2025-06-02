@@ -54,28 +54,6 @@ module "carshub_private_subnets" {
   location                 = var.location
 }
 
-# Firewall Creation
-module "carshub_firewall" {
-  source = "../../modules/network/firewall"
-  vpc_id = module.carshub_vpc.vpc_id
-  firewall_data = [
-    {
-      firewall_name      = "carshub-allow-frontend-to-backend"
-      firewall_direction = "INGRESS"
-      priority           = 1000
-      source_ranges      = ["${module.carshub_frontend_service_lb.ip_address}"]
-      target_tags        = ["carshub-backend-compute-health-check"]
-      allow_list = [
-        {
-          protocol = "tcp"
-          ports    = ["80"]
-        }
-      ]
-      description = "Allow traffic from frontend LB to backend LB"
-    }
-  ]
-}
-
 # Serverless VPC Creation
 module "carshub_vpc_connectors" {
   source   = "../../modules/network/vpc-connector"
@@ -587,4 +565,81 @@ module "carshub_cloudbuild_backend_trigger" {
     _PROJECT_ID = "${data.google_project.project.project_id}"
   }
   service_account = module.carshub_cloudbuild_service_account.id
+}
+
+# Uptime checks
+module "frontend_uptime_check" {
+  source              = "../../modules/observability/uptime_checks"
+  display_name        = "Frontend Uptime Check"
+  timeout             = "30s"
+  period              = "60s"
+  http_path           = "/auth/signin"
+  http_port           = "80"
+  http_request_method = "GET"
+  http_validate_ssl   = false
+  resource_type       = "uptime_url"
+  resource_host       = module.frontend_lb.address
+  checker_type        = "STATIC_IP_CHECKERS"
+}
+
+module "backend_uptime_check" {
+  source              = "../../modules/observability/uptime_checks"
+  display_name        = "Backend Uptime Check"
+  timeout             = "30s"
+  period              = "60s"
+  http_path           = "/"
+  http_port           = "80"
+  http_request_method = "GET"
+  http_validate_ssl   = false
+  resource_type       = "uptime_url"
+  resource_host       = module.backend_lb.address
+  checker_type        = "STATIC_IP_CHECKERS"
+}
+
+# Observability Metrics
+module "http_4xx_errors" {
+  source       = "../../modules/observability/metrics"
+  name         = "http_4xx_errors"
+  filter       = <<-EOT
+    resource.type="http_load_balancer"
+    httpRequest.status>=400
+    httpRequest.status<500
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "INT64"
+  display_name = "HTTP 4xx Errors"
+  label_extractors = {
+    "status_code" = "EXTRACT(httpRequest.status)"
+    "url_map"     = "EXTRACT(resource.labels.url_map_name)"
+  }
+}
+
+module "http_5xx_errors" {
+  source       = "../../modules/observability/metrics"
+  name         = "http_5xx_errors"
+  filter       = <<-EOT
+    resource.type="http_load_balancer"
+    httpRequest.status>=500
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "INT64"
+  display_name = "HTTP 5xx Errors"
+  label_extractors = {
+    "status_code" = "EXTRACT(httpRequest.status)"
+    "url_map"     = "EXTRACT(resource.labels.url_map_name)"
+  }
+}
+
+module "database_connection_errors" {
+  source       = "../../modules/observability/metrics"
+  name         = "database_connection_errors"
+  filter       = <<-EOT
+    resource.type="cloudsql_database"
+    (textPayload:"connection" OR textPayload:"timeout" OR textPayload:"failed")
+    severity="ERROR"
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "INT64"
+  display_name = "Database Connection Errors"
+   label_extractors = {}
 }
