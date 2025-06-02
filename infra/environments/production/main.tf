@@ -302,14 +302,14 @@ module "carshub_db" {
   db_user                     = module.carshub_sql_username_secret.secret_data
   db_version                  = "MYSQL_8_0"
   location                    = var.location
-  tier                        = "db-custom-4-15360"
+  tier                        = "db-custom-2-8192"
   availability_type           = "REGIONAL"
   disk_size                   = 100 # GB
   disk_type                   = "PD_SSD"
   disk_autoresize             = true
   disk_autoresize_limit       = 500 # GB
   ipv4_enabled                = false
-  deletion_protection_enabled = false
+  deletion_protection_enabled = true
   backup_configuration = [
     {
       enabled                        = true
@@ -319,7 +319,7 @@ module "carshub_db" {
       point_in_time_recovery_enabled = false
       backup_retention_settings = [
         {
-          retained_backups = 7
+          retained_backups = 30
           retention_unit   = "COUNT"
         }
       ]
@@ -333,15 +333,15 @@ module "carshub_db" {
     {
       name  = "skip_show_database"
       value = "on"
-    },
-    {
-      name  = "innodb_buffer_pool_size"
-      value = "20GB"
-    },
-    {
-      name  = "query_cache_size"
-      value = "256MB"
     }
+    # {
+    #   name  = "innodb_buffer_pool_size"
+    #   value = "20GB"
+    # },
+    # {
+    #   name  = "query_cache_size"
+    #   value = "256MB"
+    # }
   ]
   vpc_self_link = module.carshub_vpc.self_link
   vpc_id        = module.carshub_vpc.vpc_id
@@ -368,7 +368,7 @@ module "carshub_frontend_service" {
   vpc_connector_name               = module.carshub_vpc_connectors.vpc_connectors[0].id
   service_account                  = module.carshub_cloud_run_service_account.sa_email
   location                         = var.location
-  min_instance_count               = 2
+  min_instance_count               = 5
   max_instance_count               = 10
   max_instance_request_concurrency = 80
   name                             = "carshub-frontend-service"
@@ -399,8 +399,8 @@ module "carshub_backend_service" {
   ingress                          = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
   service_account                  = module.carshub_cloud_run_service_account.sa_email
   location                         = var.location
-  min_instance_count               = 2
-  max_instance_count               = 10
+  min_instance_count               = 5
+  max_instance_count               = 100
   max_instance_request_concurrency = 80
   volumes = [
     {
@@ -612,49 +612,49 @@ module "backend_uptime_check" {
 }
 
 # Observability Metrics
-module "http_4xx_errors" {
-  source       = "../../modules/observability/metrics"
-  name         = "http_4xx_errors"
-  filter       = <<-EOT
-    resource.type="http_load_balancer"
-    httpRequest.status>=400
-    httpRequest.status<500
-  EOT
-  metric_kind  = "DELTA"
-  value_type   = "INT64"
-  display_name = "HTTP 4xx Errors"
-  label_extractors = {
-    "status_code" = "EXTRACT(httpRequest.status)"
-    "url_map"     = "EXTRACT(resource.labels.url_map_name)"
-  }
-}
+# module "http_4xx_errors" {
+#   source       = "../../modules/observability/metrics"
+#   name         = "http_4xx_errors"
+#   filter       = <<-EOT
+#     resource.type="http_load_balancer"
+#     httpRequest.status>=400
+#     httpRequest.status<500
+#   EOT
+#   metric_kind  = "DELTA"
+#   value_type   = "INT64"
+#   display_name = "HTTP 4xx Errors"
+#   label_extractors = {
+#     "status_code" = "EXTRACT(httpRequest.status)"
+#     "url_map"     = "EXTRACT(resource.labels.url_map_name)"
+#   }
+# }
 
-module "http_5xx_errors" {
-  source       = "../../modules/observability/metrics"
-  name         = "http_5xx_errors"
-  filter       = <<-EOT
-    resource.type="http_load_balancer"
-    httpRequest.status>=500
-  EOT
-  metric_kind  = "DELTA"
-  value_type   = "INT64"
-  display_name = "HTTP 5xx Errors"
-  label_extractors = {
-    "status_code" = "EXTRACT(httpRequest.status)"
-    "url_map"     = "EXTRACT(resource.labels.url_map_name)"
-  }
-}
+# module "http_5xx_errors" {
+#   source       = "../../modules/observability/metrics"
+#   name         = "http_5xx_errors"
+#   filter       = <<-EOT
+#     resource.type="http_load_balancer"
+#     httpRequest.status>=500
+#   EOT
+#   metric_kind  = "DELTA"
+#   value_type   = "INT64"
+#   display_name = "HTTP 5xx Errors"
+#   label_extractors = {
+#     "status_code" = "EXTRACT(httpRequest.status)"
+#     "url_map"     = "EXTRACT(resource.labels.url_map_name)"
+#   }
+# }
 
-module "database_connection_errors" {
-  source           = "../../modules/observability/metrics"
-  name             = "database_connection_errors"
-  filter           = <<-EOT
-    resource.type="cloudsql_database"
-    (textPayload:"connection" OR textPayload:"timeout" OR textPayload:"failed")
-    severity="ERROR"
-  EOT
-  metric_kind      = "DELTA"
-  value_type       = "INT64"
-  display_name     = "Database Connection Errors"
-  label_extractors = {}
-}
+# module "database_connection_errors" {
+#   source           = "../../modules/observability/metrics"
+#   name             = "database_connection_errors"
+#   filter           = <<-EOT
+#     resource.type="cloudsql_database"
+#     (textPayload:"connection" OR textPayload:"timeout" OR textPayload:"failed")
+#     severity="ERROR"
+#   EOT
+#   metric_kind      = "DELTA"
+#   value_type       = "INT64"
+#   display_name     = "Database Connection Errors"
+#   label_extractors = {}
+# }

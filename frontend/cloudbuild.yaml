@@ -1,5 +1,11 @@
 steps:
   # Step 1: Set up Docker image build and push to Google Artifact Registry
+  - name: 'bash'
+    script: |
+      cat > .env << EOL
+        BASE_URL=${_BACKEND_IP_ADDRESS}
+        CDN_URL=${_CDN_IP_ADDRESS}
+      EOL
   - name: "gcr.io/cloud-builders/docker"
     args:
       [

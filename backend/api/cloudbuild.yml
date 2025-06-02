@@ -1,5 +1,5 @@
 steps:
-  # Step 1: Set up Docker image build and push to Google Artifact Registry (GCR)
+  # Step 1: Set up Docker image build and push to Google Artifact Registry
   - name: "gcr.io/cloud-builders/docker"
     args:
       [
