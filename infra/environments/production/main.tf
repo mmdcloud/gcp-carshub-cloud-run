@@ -309,7 +309,7 @@ module "carshub_db" {
   disk_autoresize             = true
   disk_autoresize_limit       = 500 # GB
   ipv4_enabled                = false
-  deletion_protection_enabled = true
+  deletion_protection_enabled = false
   backup_configuration = [
     {
       enabled                        = true
@@ -557,12 +557,14 @@ module "carshub_cloudbuild_frontend_trigger" {
   trigger_name = "carshub-frontend-trigger"
   location     = var.location
   repo_name    = "mmdcloud-carshub-gcp-cloud-run"
-  source_uri   = "https://github.com/mmdcloud/carshub-gcp-cloud-run"
+  source_uri   = "https://github.com/mmdcloud/gcp-carshub-cloud-run"
   source_ref   = "frontend"
   repo_type    = "GITHUB"
   filename     = "cloudbuild.yaml"
   substitutions = {
     _PROJECT_ID = "${data.google_project.project.project_id}"
+    _BACKEND_IP_ADDRESS = "${module.carshub_backend_service_lb.ip_address}"
+    _CDN_IP_ADDRESS = "${module.carshub_cdn.cdn_ip_address}"
   }
   service_account = module.carshub_cloudbuild_service_account.id
 }
@@ -572,7 +574,7 @@ module "carshub_cloudbuild_backend_trigger" {
   trigger_name = "carshub-backend-trigger"
   location     = var.location
   repo_name    = "mmdcloud-carshub-gcp-cloud-run"
-  source_uri   = "https://github.com/mmdcloud/carshub-gcp-cloud-run"
+  source_uri   = "https://github.com/mmdcloud/gcp-carshub-cloud-run"
   source_ref   = "backend"
   repo_type    = "GITHUB"
   filename     = "cloudbuild.yaml"
