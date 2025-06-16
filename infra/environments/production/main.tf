@@ -63,7 +63,7 @@ module "carshub_vpc_connectors" {
       name          = "carshub-connector"
       ip_cidr_range = "10.8.0.0/28"
       min_instances = 2
-      max_instances = 10
+      max_instances = 3
       machine_type  = "e2-micro"
     }
   ]
@@ -115,40 +115,40 @@ module "carshub_cloud_run_service_account" {
 }
 
 # Cloud Armor WAF protection for Load Balancers
-module "cloud_armor" {
-  source  = "GoogleCloudPlatform/cloud-armor/google"
-  version = "~> 5.0"
+# module "cloud_armor" {
+#   source  = "GoogleCloudPlatform/cloud-armor/google"
+#   version = "~> 5.0"
 
-  project_id                           = var.project_id
-  name                                 = "test-casp-policy"
-  description                          = "Test Cloud Armor security policy with preconfigured rules, security rules and custom rules"
-  default_rule_action                  = "allow"
-  type                                 = "CLOUD_ARMOR"
-  layer_7_ddos_defense_enable          = true
-  layer_7_ddos_defense_rule_visibility = "STANDARD"
-  user_ip_request_headers              = ["True-Client-IP", ]
+#   project_id                           = var.project_id
+#   name                                 = "test-casp-policy"
+#   description                          = "Test Cloud Armor security policy with preconfigured rules, security rules and custom rules"
+#   default_rule_action                  = "allow"
+#   type                                 = "CLOUD_ARMOR"
+#   layer_7_ddos_defense_enable          = true
+#   layer_7_ddos_defense_rule_visibility = "STANDARD"
+#   user_ip_request_headers              = ["True-Client-IP", ]
 
-  # preconfigured WAF rules
-  pre_configured_rules = {
-    "xss-stable_level_2_with_exclude" = {
-      action                  = "deny(502)"
-      priority                = 2
-      preview                 = true
-      target_rule_set         = "xss-v33-stable"
-      sensitivity_level       = 2
-      exclude_target_rule_ids = ["owasp-crs-v030301-id941380-xss", "owasp-crs-v030301-id941280-xss"]
-    }
+#   # preconfigured WAF rules
+#   pre_configured_rules = {
+#     "xss-stable_level_2_with_exclude" = {
+#       action                  = "deny(502)"
+#       priority                = 2
+#       preview                 = true
+#       target_rule_set         = "xss-v33-stable"
+#       sensitivity_level       = 2
+#       exclude_target_rule_ids = ["owasp-crs-v030301-id941380-xss", "owasp-crs-v030301-id941280-xss"]
+#     }
 
-    "php-stable_level_0_with_include" = {
-      action                  = "deny(502)"
-      priority                = 3
-      description             = "PHP Sensitivity Level 0 with included rules"
-      target_rule_set         = "php-v33-stable"
-      include_target_rule_ids = ["owasp-crs-v030301-id933190-php", "owasp-crs-v030301-id933111-php"]
-    }
+#     "php-stable_level_0_with_include" = {
+#       action                  = "deny(502)"
+#       priority                = 3
+#       description             = "PHP Sensitivity Level 0 with included rules"
+#       target_rule_set         = "php-v33-stable"
+#       include_target_rule_ids = ["owasp-crs-v030301-id933190-php", "owasp-crs-v030301-id933111-php"]
+#     }
 
-  }
-}
+#   }
+# }
 
 // Creating a Pub/Sub topic.
 resource "google_pubsub_topic_iam_binding" "binding" {
@@ -368,8 +368,8 @@ module "carshub_frontend_service" {
   vpc_connector_name               = module.carshub_vpc_connectors.vpc_connectors[0].id
   service_account                  = module.carshub_cloud_run_service_account.sa_email
   location                         = var.location
-  min_instance_count               = 5
-  max_instance_count               = 10
+  min_instance_count               = 2
+  max_instance_count               = 4
   max_instance_request_concurrency = 80
   name                             = "carshub-frontend-service"
   volumes                          = []
@@ -399,8 +399,8 @@ module "carshub_backend_service" {
   ingress                          = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
   service_account                  = module.carshub_cloud_run_service_account.sa_email
   location                         = var.location
-  min_instance_count               = 5
-  max_instance_count               = 100
+  min_instance_count               = 2
+  max_instance_count               = 4
   max_instance_request_concurrency = 80
   volumes = [
     {
@@ -520,7 +520,7 @@ module "carshub_frontend_service_lb" {
   backend_service_name     = "carshub-frontend-compute"
   backend_service_protocol = "HTTP"
   backend_service_timeout  = 30
-  security_policy          = module.cloud_armor.policy.id
+  # security_policy          = module.cloud_armor.policy.id
   backends = [
     {
       backend = module.carshub_frontend_service_neg.id
@@ -542,7 +542,7 @@ module "carshub_backend_service_lb" {
   backend_service_name     = "carshub-backend-compute"
   backend_service_protocol = "HTTP"
   backend_service_timeout  = 30
-  security_policy          = module.cloud_armor.policy.id
+  # security_policy          = module.cloud_armor.policy.id
   backends = [
     {
       backend = module.carshub_backend_service_neg.id
@@ -556,15 +556,15 @@ module "carshub_cloudbuild_frontend_trigger" {
   source       = "../../modules/cloudbuild"
   trigger_name = "carshub-frontend-trigger"
   location     = var.location
-  repo_name    = "mmdcloud-carshub-gcp-cloud-run"
+  repo_name    = "mmdcloud-gcp-carshub-cloud-run"
   source_uri   = "https://github.com/mmdcloud/gcp-carshub-cloud-run"
   source_ref   = "frontend"
   repo_type    = "GITHUB"
   filename     = "cloudbuild.yaml"
   substitutions = {
-    _PROJECT_ID = "${data.google_project.project.project_id}"
+    _PROJECT_ID         = "${data.google_project.project.project_id}"
     _BACKEND_IP_ADDRESS = "${module.carshub_backend_service_lb.ip_address}"
-    _CDN_IP_ADDRESS = "${module.carshub_cdn.cdn_ip_address}"
+    _CDN_IP_ADDRESS     = "${module.carshub_cdn.cdn_ip_address}"
   }
   service_account = module.carshub_cloudbuild_service_account.id
 }
@@ -573,7 +573,7 @@ module "carshub_cloudbuild_backend_trigger" {
   source       = "../../modules/cloudbuild"
   trigger_name = "carshub-backend-trigger"
   location     = var.location
-  repo_name    = "mmdcloud-carshub-gcp-cloud-run"
+  repo_name    = "mmdcloud-gcp-carshub-cloud-run"
   source_uri   = "https://github.com/mmdcloud/gcp-carshub-cloud-run"
   source_ref   = "backend"
   repo_type    = "GITHUB"
