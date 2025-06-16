@@ -309,7 +309,7 @@ module "carshub_db" {
   disk_autoresize             = true
   disk_autoresize_limit       = 500 # GB
   ipv4_enabled                = false
-  deletion_protection_enabled = false
+  deletion_protection_enabled = true
   backup_configuration = [
     {
       enabled                        = true
@@ -363,13 +363,13 @@ module "carshub_run_iam_permissions" {
 # Cloud Run Frontend Service
 module "carshub_frontend_service" {
   source                           = "../../modules/cloud-run"
-  deletion_protection              = false
+  deletion_protection              = true
   ingress                          = "INGRESS_TRAFFIC_ALL"
   vpc_connector_name               = module.carshub_vpc_connectors.vpc_connectors[0].id
   service_account                  = module.carshub_cloud_run_service_account.sa_email
   location                         = var.location
   min_instance_count               = 2
-  max_instance_count               = 4
+  max_instance_count               = 5
   max_instance_request_concurrency = 80
   name                             = "carshub-frontend-service"
   volumes                          = []
@@ -394,13 +394,13 @@ module "carshub_frontend_service" {
 # Cloud Run Backend Service
 module "carshub_backend_service" {
   source                           = "../../modules/cloud-run"
-  deletion_protection              = false
+  deletion_protection              = true
   vpc_connector_name               = module.carshub_vpc_connectors.vpc_connectors[0].id
   ingress                          = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
   service_account                  = module.carshub_cloud_run_service_account.sa_email
   location                         = var.location
   min_instance_count               = 2
-  max_instance_count               = 4
+  max_instance_count               = 5
   max_instance_request_concurrency = 80
   volumes = [
     {
