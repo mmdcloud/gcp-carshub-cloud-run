@@ -169,7 +169,7 @@ module "carshub_frontend_artifact_registry" {
   location      = var.location
   description   = "CarHub frontend repository"
   repository_id = "carshub-frontend"
-  shell_command = "bash ${path.cwd}/../../../frontend/artifact_push.sh http://${module.carshub_backend_service_lb.ip_address} ${module.carshub_cdn.cdn_ip_address} ${data.google_project.project.project_id}"
+  shell_command = "bash ${path.cwd}/../../../src/frontend/artifact_push.sh http://${module.carshub_backend_service_lb.ip_address} ${module.carshub_cdn.cdn_ip_address} ${data.google_project.project.project_id}"
   depends_on    = [module.carshub_backend_service, module.carshub_apis]
 }
 
@@ -178,7 +178,7 @@ module "carshub_backend_artifact_registry" {
   location      = var.location
   description   = "CarHub backend repository"
   repository_id = "carshub-backend"
-  shell_command = "bash ${path.cwd}/../../../backend/api/artifact_push.sh ${data.google_project.project.project_id}"
+  shell_command = "bash ${path.cwd}/../../../src/backend/api/artifact_push.sh ${data.google_project.project.project_id}"
   depends_on    = [module.carshub_db, module.carshub_apis]
 }
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 mkdir backend-code
-cp -r ../../../backend/api/* backend-code/
+cp -r ../../../../src/backend/api/* backend-code/
 cd backend-code
 
 docker buildx build --tag carshub-backend --file ./Dockerfile .

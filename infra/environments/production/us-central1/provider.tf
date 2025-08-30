@@ -1,4 +1,5 @@
 terraform {
+  required_version = ">= 1.5"
   required_providers {
     google = {
       source  = "hashicorp/google"
@@ -9,10 +10,10 @@ terraform {
       version = "~> 4.0"
     }
   }
-  # backend "gcs" {
-  #   bucket  = "your-terraform-state-bucket"
-  #   prefix  = "prod/terraform"
-  # }
+  backend "gcs" {
+    bucket = "carshub-terraform-state"
+    prefix = "prod"
+  }
 }
 
 provider "google" {
