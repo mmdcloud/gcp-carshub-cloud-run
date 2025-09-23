@@ -45,4 +45,3 @@ resource "google_compute_global_forwarding_rule" "global_forwarding_rule" {
   port_range            = var.forwarding_port_range
   target                = google_compute_target_http_proxy.target_http_proxy.self_link
 }
-

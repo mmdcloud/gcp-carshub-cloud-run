@@ -28,30 +28,16 @@ module "carshub_apis" {
   project_id         = data.google_project.project.project_id
 }
 
-# VPC Creation
+# VPC
 module "carshub_vpc" {
-  source                  = "../../../modules/network/vpc"
-  auto_create_subnetworks = false
-  vpc_name                = "carshub-vpc"
-}
-
-# Subnets Creation
-module "carshub_public_subnets" {
-  source                   = "../../../modules/network/subnet"
-  name                     = "carshub-public-subnet"
-  subnets                  = var.public_subnets
-  vpc_id                   = module.carshub_vpc.vpc_id
-  private_ip_google_access = false
-  location                 = var.location
-}
-
-module "carshub_private_subnets" {
-  source                   = "../../../modules/network/subnet"
-  name                     = "carshub-private-subnet"
-  subnets                  = var.private_subnets
-  vpc_id                   = module.carshub_vpc.vpc_id
-  private_ip_google_access = true
-  location                 = var.location
+  source                          = "../../../modules/vpc"
+  vpc_name                        = "carshub-vpc"
+  delete_default_routes_on_create = false
+  auto_create_subnetworks         = false
+  routing_mode                    = "REGIONAL"
+  region                          = var.location
+  subnets = []
+  firewall_data = []
 }
 
 # Serverless VPC Creation
@@ -536,10 +522,10 @@ module "carshub_backend_service_neg" {
   service_name = module.carshub_backend_service.name
 }
 
-# Load Balancer with HTTPS
+# Load Balancer with HTTP
 module "carshub_frontend_service_lb" {
   source                   = "../../../modules/load-balancer"
-  forwarding_port_range    = "443"
+  forwarding_port_range    = "80"
   forwarding_rule_name     = "carshub-frontend-service-global-forwarding-rule"
   forwarding_scheme        = "EXTERNAL"
   global_address_type      = "EXTERNAL"
@@ -547,7 +533,7 @@ module "carshub_frontend_service_lb" {
   global_address_name      = "carshub-frontend-service-lb-global-address"
   target_proxy_name        = "carshub-frontend-service-target-proxy"
   backend_service_name     = "carshub-frontend-compute"
-  backend_service_protocol = "HTTPS"
+  backend_service_protocol = "HTTP"
   backend_service_timeout  = 30
   # security_policy          = module.cloud_armor.policy.id
   # ssl_certificates         = [google_compute_managed_ssl_certificate.carshub_ssl_cert.id]
@@ -559,10 +545,10 @@ module "carshub_frontend_service_lb" {
   depends_on = [module.carshub_frontend_service]
 }
 
-# Backend Load Balancer with HTTPS
+# Backend Load Balancer with HTTP
 module "carshub_backend_service_lb" {
   source                   = "../../../modules/load-balancer"
-  forwarding_port_range    = "443"
+  forwarding_port_range    = "80"
   forwarding_rule_name     = "carshub-backend-service-global-forwarding-rule"
   forwarding_scheme        = "EXTERNAL"
   global_address_type      = "EXTERNAL"
@@ -570,7 +556,7 @@ module "carshub_backend_service_lb" {
   global_address_name      = "carshub-backend-service-lb-global-address"
   target_proxy_name        = "carshub-backend-service-target-proxy"
   backend_service_name     = "carshub-backend-compute"
-  backend_service_protocol = "HTTPS"
+  backend_service_protocol = "HTTP"
   backend_service_timeout  = 30
   # security_policy          = module.cloud_armor.policy.id
   # ssl_certificates         = [google_compute_managed_ssl_certificate.carshub_ssl_cert.id]
