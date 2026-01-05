@@ -1,14 +1,20 @@
+# -----------------------------------------------------------------------------------------
 # Registering vault provider
+# -----------------------------------------------------------------------------------------
 data "vault_generic_secret" "sql" {
   path = "secret/sql"
 }
 
+# -----------------------------------------------------------------------------------------
 # Getting project information
+# -----------------------------------------------------------------------------------------
 data "google_project" "project" {}
 data "google_storage_transfer_project_service_account" "default" {}
 data "google_storage_project_service_account" "carshub_gcs_account" {}
 
-# Enable APIS
+# -----------------------------------------------------------------------------------------
+# Enabling APIS
+# -----------------------------------------------------------------------------------------
 module "carshub_apis" {
   source = "../../../modules/apis"
   apis = [
@@ -28,7 +34,9 @@ module "carshub_apis" {
   project_id         = data.google_project.project.project_id
 }
 
+# -----------------------------------------------------------------------------------------
 # VPC
+# -----------------------------------------------------------------------------------------
 module "carshub_vpc" {
   source                          = "../../../modules/vpc"
   vpc_name                        = "carshub-vpc"
@@ -40,7 +48,9 @@ module "carshub_vpc" {
   firewall_data = []
 }
 
-# Serverless VPC Creation
+# -----------------------------------------------------------------------------------------
+# Serverless VPC Connectors
+# -----------------------------------------------------------------------------------------
 module "carshub_vpc_connectors" {
   source   = "../../../modules/network/vpc-connector"
   vpc_name = module.carshub_vpc.vpc_name
@@ -55,7 +65,9 @@ module "carshub_vpc_connectors" {
   ]
 }
 
-# Service Account
+# -----------------------------------------------------------------------------------------
+# Service Accounts
+# -----------------------------------------------------------------------------------------
 module "carshub_function_app_service_account" {
   source        = "../../../modules/service-account"
   account_id    = "carshub-service-account"
@@ -100,7 +112,9 @@ module "carshub_cloud_run_service_account" {
   ]
 }
 
+# -----------------------------------------------------------------------------------------
 # Cloud Armor WAF protection for Load Balancers
+# -----------------------------------------------------------------------------------------
 # module "cloud_armor" {
 #   source  = "GoogleCloudPlatform/cloud-armor/google"
 #   version = "~> 5.0"
@@ -156,20 +170,23 @@ module "carshub_cloud_run_service_account" {
 #   }
 # }
 
-// Creating a Pub/Sub topic.
+# -----------------------------------------------------------------------------------------
+# Pub/Sub Configuration
+# -----------------------------------------------------------------------------------------
 resource "google_pubsub_topic_iam_binding" "binding" {
   topic   = module.carshub_media_bucket_pubsub.topic_id
   role    = "roles/pubsub.publisher"
   members = ["serviceAccount:${data.google_storage_project_service_account.carshub_gcs_account.email_address}"]
 }
 
-# Creating a Pub/Sub topic to send cloud storage events
 module "carshub_media_bucket_pubsub" {
   source = "../../../modules/pubsub"
   topic  = "carshub_media_bucket_events"
 }
 
-# Artifact Registry
+# -----------------------------------------------------------------------------------------
+# Artifact Registry Configuration
+# -----------------------------------------------------------------------------------------
 module "carshub_frontend_artifact_registry" {
   source        = "../../../modules/artifact-registry"
   location      = var.location
@@ -188,7 +205,9 @@ module "carshub_backend_artifact_registry" {
   depends_on    = [module.carshub_db, module.carshub_apis]
 }
 
-# GCS
+# -----------------------------------------------------------------------------------------
+# Google Cloud Storage (GCS) Configuration
+# -----------------------------------------------------------------------------------------
 module "carshub_media_bucket" {
   source   = "../../../modules/gcs"
   location = var.location
@@ -269,7 +288,9 @@ resource "google_storage_bucket_iam_binding" "storage_iam_binding" {
   ]
 }
 
-# CDN for handling media files
+# -----------------------------------------------------------------------------------------
+# CDN Configuration
+# -----------------------------------------------------------------------------------------
 module "carshub_cdn" {
   source                = "../../../modules/cdn"
   bucket_name           = module.carshub_media_bucket.bucket_name
@@ -285,7 +306,9 @@ module "carshub_cdn" {
   target_proxy_name     = "carshub-cdn-target-proxy"
 }
 
-# Secret Manager
+# -----------------------------------------------------------------------------------------
+# Secret Manager Configuration
+# -----------------------------------------------------------------------------------------
 module "carshub_sql_password_secret" {
   source      = "../../../modules/secret-manager"
   secret_data = tostring(data.vault_generic_secret.sql.data["password"])
@@ -300,7 +323,9 @@ module "carshub_sql_username_secret" {
   depends_on  = [module.carshub_apis]
 }
 
-# Cloud SQL
+# -----------------------------------------------------------------------------------------
+# Cloud SQL Configuration
+# -----------------------------------------------------------------------------------------
 module "carshub_db" {
   source                      = "../../../modules/cloud-sql"
   name                        = "carshub-db-instance"
@@ -355,9 +380,9 @@ module "carshub_db" {
   depends_on    = [module.carshub_sql_password_secret]
 }
 
-# Cloud Run
-
-# Cloud Run IAM Permissions
+# -----------------------------------------------------------------------------------------
+# Cloud Run Configuration
+# -----------------------------------------------------------------------------------------
 module "carshub_run_iam_permissions" {
   source = "../../../modules/cloud-run-iam"
   members = [
@@ -366,7 +391,6 @@ module "carshub_run_iam_permissions" {
   ]
 }
 
-# Cloud Run Frontend Service
 module "carshub_frontend_service" {
   source                           = "../../../modules/cloud-run"
   deletion_protection              = false
@@ -397,7 +421,6 @@ module "carshub_frontend_service" {
   depends_on = [module.carshub_frontend_artifact_registry, module.carshub_apis, module.carshub_cloud_run_service_account]
 }
 
-# Cloud Run Backend Service
 module "carshub_backend_service" {
   source                           = "../../../modules/cloud-run"
   deletion_protection              = false
@@ -472,7 +495,9 @@ module "carshub_backend_service" {
   depends_on = [module.carshub_apis, module.carshub_sql_password_secret, module.carshub_backend_artifact_registry, module.carshub_cloud_run_service_account]
 }
 
-# Cloud Run Function (Any cloud run function can only have one trigger at a time)
+# -----------------------------------------------------------------------------------------
+# Cloud Function Configuration
+# -----------------------------------------------------------------------------------------
 module "carshub_media_update_function" {
   source                       = "../../../modules/cloud-run-function"
   function_name                = "carshub-media-function"
@@ -505,7 +530,9 @@ module "carshub_media_update_function" {
   depends_on                          = [module.carshub_function_app_service_account]
 }
 
-# Network endpoint groups
+# -----------------------------------------------------------------------------------------
+# Network endpoint groups Configuration
+# -----------------------------------------------------------------------------------------
 module "carshub_frontend_service_neg" {
   source       = "../../../modules/network_endpoint_groups"
   neg_name     = "carshub-frontend-service-neg"
@@ -522,7 +549,9 @@ module "carshub_backend_service_neg" {
   service_name = module.carshub_backend_service.name
 }
 
-# Load Balancer with HTTP
+# -----------------------------------------------------------------------------------------
+# Load Balancer Configuration
+# -----------------------------------------------------------------------------------------
 module "carshub_frontend_service_lb" {
   source                   = "../../../modules/load-balancer"
   forwarding_port_range    = "80"
@@ -568,7 +597,9 @@ module "carshub_backend_service_lb" {
   depends_on = [module.carshub_backend_service]
 }
 
-# CloudBuild configuration
+# -----------------------------------------------------------------------------------------
+# CloudBuild Configuration
+# -----------------------------------------------------------------------------------------
 module "carshub_cloudbuild_frontend_trigger" {
   source       = "../../../modules/cloudbuild"
   trigger_name = "carshub-frontend-trigger"
@@ -601,7 +632,9 @@ module "carshub_cloudbuild_backend_trigger" {
   service_account = module.carshub_cloudbuild_service_account.id
 }
 
-# Uptime checks
+# -----------------------------------------------------------------------------------------
+# Uptime Checks Configuration
+# -----------------------------------------------------------------------------------------
 module "frontend_uptime_check" {
   source              = "../../../modules/observability/uptime_checks"
   display_name        = "Frontend Uptime Check"
@@ -630,7 +663,9 @@ module "backend_uptime_check" {
   checker_type        = "STATIC_IP_CHECKERS"
 }
 
+# -----------------------------------------------------------------------------------------
 # Observability Metrics for Production Monitoring
+# -----------------------------------------------------------------------------------------
 # module "http_4xx_errors" {
 #   source       = "../../../modules/observability/metrics"
 #   name         = "http_4xx_errors"

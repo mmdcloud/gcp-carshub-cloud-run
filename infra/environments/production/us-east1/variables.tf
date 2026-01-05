@@ -22,3 +22,13 @@ variable "private_subnets" {
   type    = list(string)
   default = ["10.0.4.0/24", "10.0.5.0/24", "10.0.6.0/24"]
 }
+
+variable "notification_channel_email" {
+  type        = string
+  description = "Email notification channel for alerts"
+}
+
+variable "environment" {
+  type        = string
+  description = "Environment name"
+}
