@@ -9,7 +9,6 @@ data "vault_generic_secret" "sql" {
 # Getting project information
 # -----------------------------------------------------------------------------------------
 data "google_project" "project" {}
-data "google_storage_transfer_project_service_account" "default" {}
 data "google_storage_project_service_account" "carshub_gcs_account" {}
 
 # -----------------------------------------------------------------------------------------
@@ -44,8 +43,8 @@ module "carshub_vpc" {
   auto_create_subnetworks         = false
   routing_mode                    = "REGIONAL"
   region                          = var.location
-  subnets = []
-  firewall_data = []
+  subnets                         = []
+  firewall_data                   = []
 }
 
 # -----------------------------------------------------------------------------------------
@@ -79,7 +78,8 @@ module "carshub_function_app_service_account" {
     "roles/eventarc.eventReceiver",
     "roles/cloudsql.client",
     "roles/artifactregistry.reader",
-    "roles/secretmanager.admin",
+    # "roles/secretmanager.admin",
+    "roles/secretmanager.secretAccessor",
     "roles/pubsub.publisher"
   ]
 }
@@ -107,7 +107,8 @@ module "carshub_cloud_run_service_account" {
   member_prefix = "serviceAccount"
   permissions = [
     "roles/secretmanager.secretAccessor",
-    "roles/storage.admin",
+    # "roles/storage.admin",
+    "roles/storage.objectAdmin",
     "roles/iam.serviceAccountTokenCreator"
   ]
 }
@@ -115,58 +116,138 @@ module "carshub_cloud_run_service_account" {
 # -----------------------------------------------------------------------------------------
 # Cloud Armor WAF protection for Load Balancers
 # -----------------------------------------------------------------------------------------
-# module "cloud_armor" {
-#   source  = "GoogleCloudPlatform/cloud-armor/google"
-#   version = "~> 5.0"
+module "cloud_armor" {
+  source  = "GoogleCloudPlatform/cloud-armor/google"
+  version = "~> 5.0"
 
-#   project_id                           = data.google_project.project.project_id
-#   name                                 = "carshub-security-policy"
-#   description                          = "CarHub Cloud Armor security policy with WAF rules"
-#   default_rule_action                  = "allow"
-#   type                                 = "CLOUD_ARMOR"
-#   layer_7_ddos_defense_enable          = true
-#   layer_7_ddos_defense_rule_visibility = "STANDARD"
-#   user_ip_request_headers              = ["True-Client-IP"]
+  project_id                           = data.google_project.project.project_id
+  name                                 = "carshub-security-policy"
+  description                          = "CarHub Cloud Armor security policy with WAF rules"
+  default_rule_action                  = "allow"
+  type                                 = "CLOUD_ARMOR"
+  layer_7_ddos_defense_enable          = true
+  layer_7_ddos_defense_rule_visibility = "STANDARD"
+  user_ip_request_headers              = ["True-Client-IP"]
 
-#   # Rate limiting rule
-#   security_rules = {
-#     "rate_limit_rule" = {
-#       action      = "rate_based_ban"
-#       priority    = 1
-#       description = "Rate limiting rule"
-#       rate_limit_options = {
-#         conform_action = "allow"
-#         exceed_action  = "deny(429)"
-#         enforce_on_key = "IP"
-#         rate_limit_threshold = {
-#           count        = 100
-#           interval_sec = 60
-#         }
-#         ban_duration_sec = 300
-#       }
-#       match = {
-#         versioned_expr = "SRC_IPS_V1"
-#         config = {
-#           src_ip_ranges = ["*"]
-#         }
-#       }
-#     }
+  security_rules = {
+    # Rate limiting
+    "rate_limit_rule" = {
+      action      = "rate_based_ban"
+      priority    = 1
+      description = "Rate limiting rule"
+      rate_limit_options = {
+        conform_action = "allow"
+        exceed_action  = "deny(429)"
+        enforce_on_key = "IP"
+        rate_limit_threshold = {
+          count        = 100
+          interval_sec = 60
+        }
+        ban_duration_sec = 600 # Increased from 300
+      }
+      match = {
+        versioned_expr = "SRC_IPS_V1"
+        config = {
+          src_ip_ranges = ["*"]
+        }
+      }
+    }
+
+    # Block known bad IPs (you should maintain this list)
+    "block_bad_ips" = {
+      action      = "deny(403)"
+      priority    = 10
+      description = "Block known malicious IPs"
+      match = {
+        versioned_expr = "SRC_IPS_V1"
+        config = {
+          src_ip_ranges = [
+            # Add known malicious IPs here
+            # "1.2.3.4/32",
+          ]
+        }
+      }
+    }
+
+    # Geographic restrictions (if needed)
+    "geo_blocking" = {
+      action      = "deny(403)"
+      priority    = 11
+      description = "Block traffic from specific countries"
+      match = {
+        expr = {
+          expression = "origin.region_code in ['CN', 'RU']" # Example: block China, Russia
+        }
+      }
+    }
+  }
+
+  pre_configured_rules = {
+    "xss-stable_level_2" = {
+      action            = "deny(403)"
+      priority          = 2
+      target_rule_set   = "xss-v33-stable"
+      sensitivity_level = 2
+    }
+    "sqli-stable_level_2" = {
+      action            = "deny(403)"
+      priority          = 3
+      target_rule_set   = "sqli-v33-stable"
+      sensitivity_level = 2
+    }
+    "lfi-stable_level_2" = {
+      action            = "deny(403)"
+      priority          = 4
+      target_rule_set   = "lfi-v33-stable"
+      sensitivity_level = 2
+    }
+    "rce-stable_level_2" = {
+      action            = "deny(403)"
+      priority          = 5
+      target_rule_set   = "rce-v33-stable"
+      sensitivity_level = 2
+    }
+    "rfi-stable_level_2" = {
+      action            = "deny(403)"
+      priority          = 6
+      target_rule_set   = "rfi-v33-stable"
+      sensitivity_level = 2
+    }
+    "scannerdetection-stable_level_2" = {
+      action            = "deny(403)"
+      priority          = 7
+      target_rule_set   = "scannerdetection-v33-stable"
+      sensitivity_level = 2
+    }
+    "protocolattack-stable_level_2" = {
+      action            = "deny(403)"
+      priority          = 8
+      target_rule_set   = "protocolattack-v33-stable"
+      sensitivity_level = 2
+    }
+    "sessionfixation-stable_level_2" = {
+      action            = "deny(403)"
+      priority          = 9
+      target_rule_set   = "sessionfixation-v33-stable"
+      sensitivity_level = 2
+    }
+  }
+}
+
+# -----------------------------------------------------------------------------------------
+# 2. SECURITY: SSL/TLS Configuration
+# -----------------------------------------------------------------------------------------
+# resource "google_compute_managed_ssl_certificate" "carshub_frontend_ssl_cert" {
+#   name = "carshub-frontend-ssl-cert"
+#   managed {
+#     domains = ["frontend.carshub.example.com"]  # Replace with your domain
 #   }
+# }
 
-#   # Preconfigured WAF rules
-#   pre_configured_rules = {
-#     "xss-stable_level_2" = {
-#       action            = "deny(403)"
-#       priority          = 2
-#       target_rule_set   = "xss-v33-stable"
-#       sensitivity_level = 2
-#     }
-#     "sqli-stable_level_2" = {
-#       action            = "deny(403)"
-#       priority          = 3
-#       target_rule_set   = "sqli-v33-stable"
-#       sensitivity_level = 2
-#     }
+# resource "google_compute_managed_ssl_certificate" "carshub_backend_ssl_cert" {
+#   name = "carshub-backend-ssl-cert"
+#   managed {
+#     domains = ["api.carshub.example.com"]  # Replace with your domain
 #   }
 # }
 
@@ -279,14 +360,25 @@ module "carshub_media_bucket_code" {
 }
 
 # Cloud storage IAM binding
-resource "google_storage_bucket_iam_binding" "storage_iam_binding" {
+resource "google_storage_bucket_iam_member" "cdn_access" {
   bucket = module.carshub_media_bucket.bucket_name
   role   = "roles/storage.objectViewer"
-
-  members = [
-    "allUsers"
-  ]
+  member = "serviceAccount:service-${data.google_project.project.number}@cloud-cdn-fill.iam.gserviceaccount.com"
 }
+
+resource "google_storage_bucket_iam_member" "backend_access" {
+  bucket = module.carshub_media_bucket.bucket_name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${module.carshub_cloud_run_service_account.sa_email}"
+}
+# resource "google_storage_bucket_iam_binding" "storage_iam_binding" {
+#   bucket = module.carshub_media_bucket.bucket_name
+#   role   = "roles/storage.objectViewer"
+
+#   members = [
+#     "allUsers"
+#   ]
+# }
 
 # -----------------------------------------------------------------------------------------
 # CDN Configuration
@@ -364,15 +456,28 @@ module "carshub_db" {
     {
       name  = "skip_show_database"
       value = "on"
+    },
+    {
+      name  = "slow_query_log"
+      value = "on"
+    },
+    {
+      name  = "long_query_time"
+      value = "2"
+    },
+    {
+      name  = "log_output"
+      value = "FILE"
+    },
+    # Performance tuning
+    {
+      name  = "innodb_buffer_pool_size"
+      value = "10737418240" # 10GB for 16GB instance
+    },
+    {
+      name  = "innodb_log_file_size"
+      value = "536870912" # 512MB
     }
-    # {
-    #   name  = "innodb_buffer_pool_size"
-    #   value = "20GB"
-    # },
-    # {
-    #   name  = "query_cache_size"
-    #   value = "256MB"
-    # }
   ]
   vpc_self_link = module.carshub_vpc.self_link
   vpc_id        = module.carshub_vpc.vpc_id
@@ -666,86 +771,86 @@ module "backend_uptime_check" {
 # -----------------------------------------------------------------------------------------
 # Observability Metrics for Production Monitoring
 # -----------------------------------------------------------------------------------------
-# module "http_4xx_errors" {
-#   source       = "../../../modules/observability/metrics"
-#   name         = "http_4xx_errors"
-#   filter       = <<-EOT
-#     resource.type="http_load_balancer"
-#     httpRequest.status>=400
-#     httpRequest.status<500
-#   EOT
-#   metric_kind  = "DELTA"
-#   value_type   = "INT64"
-#   display_name = "HTTP 4xx Errors"
-#   label_extractors = {
-#     "status_code" = "EXTRACT(httpRequest.status)"
-#     "url_map"     = "EXTRACT(resource.labels.url_map_name)"
-#   }
-# }
+module "http_4xx_errors" {
+  source       = "../../../modules/observability/metrics"
+  name         = "http_4xx_errors"
+  filter       = <<-EOT
+    resource.type="http_load_balancer"
+    httpRequest.status>=400
+    httpRequest.status<500
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "INT64"
+  display_name = "HTTP 4xx Errors"
+  label_extractors = {
+    "status_code" = "EXTRACT(httpRequest.status)"
+    "url_map"     = "EXTRACT(resource.labels.url_map_name)"
+  }
+}
 
-# module "http_5xx_errors" {
-#   source       = "../../../modules/observability/metrics"
-#   name         = "http_5xx_errors"
-#   filter       = <<-EOT
-#     resource.type="http_load_balancer"
-#     httpRequest.status>=500
-#   EOT
-#   metric_kind  = "DELTA"
-#   value_type   = "INT64"
-#   display_name = "HTTP 5xx Errors"
-#   label_extractors = {
-#     "status_code" = "EXTRACT(httpRequest.status)"
-#     "url_map"     = "EXTRACT(resource.labels.url_map_name)"
-#   }
-# }
+module "http_5xx_errors" {
+  source       = "../../../modules/observability/metrics"
+  name         = "http_5xx_errors"
+  filter       = <<-EOT
+    resource.type="http_load_balancer"
+    httpRequest.status>=500
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "INT64"
+  display_name = "HTTP 5xx Errors"
+  label_extractors = {
+    "status_code" = "EXTRACT(httpRequest.status)"
+    "url_map"     = "EXTRACT(resource.labels.url_map_name)"
+  }
+}
 
-# module "database_connection_errors" {
-#   source           = "../../../modules/observability/metrics"
-#   name             = "database_connection_errors"
-#   filter           = <<-EOT
-#     resource.type="cloudsql_database"
-#     (textPayload:"connection" OR textPayload:"timeout" OR textPayload:"failed")
-#     severity="ERROR"
-#   EOT
-#   metric_kind      = "DELTA"
-#   value_type       = "INT64"
-#   display_name     = "Database Connection Errors"
-#   label_extractors = {}
-# }
+module "database_connection_errors" {
+  source           = "../../../modules/observability/metrics"
+  name             = "database_connection_errors"
+  filter           = <<-EOT
+    resource.type="cloudsql_database"
+    (textPayload:"connection" OR textPayload:"timeout" OR textPayload:"failed")
+    severity="ERROR"
+  EOT
+  metric_kind      = "DELTA"
+  value_type       = "INT64"
+  display_name     = "Database Connection Errors"
+  label_extractors = {}
+}
 
 # Alerting Policies
-# module "high_error_rate_alert" {
-#   source                = "../../../modules/observability/alerts"
-#   display_name          = "High Error Rate Alert"
-#   combiner              = "OR"
-#   notification_channels = [var.notification_channel_email]
-#   conditions = [
-#     {
-#       display_name = "HTTP 5xx Error Rate"
-#       condition_threshold = {
-#         filter          = "resource.type=\"http_load_balancer\" AND httpRequest.status>=500"
-#         duration        = "300s"
-#         comparison      = "COMPARISON_GREATER_THAN"
-#         threshold_value = 10
-#       }
-#     }
-#   ]
-# }
+module "high_error_rate_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "High Error Rate Alert"
+  combiner              = "OR"
+  notification_channels = [var.notification_channel_email]
+  conditions = [
+    {
+      display_name = "HTTP 5xx Error Rate"
+      condition_threshold = {
+        filter          = "resource.type=\"http_load_balancer\" AND httpRequest.status>=500"
+        duration        = "300s"
+        comparison      = "COMPARISON_GREATER_THAN"
+        threshold_value = 10
+      }
+    }
+  ]
+}
 
-# module "database_connection_alert" {
-#   source                = "../../../modules/observability/alerts"
-#   display_name          = "Database Connection Alert"
-#   combiner              = "OR"
-#   notification_channels = [var.notification_channel_email]
-#   conditions = [
-#     {
-#       display_name = "Database Connection Errors"
-#       condition_threshold = {
-#         filter          = "resource.type=\"cloudsql_database\" AND severity=\"ERROR\""
-#         duration        = "300s"
-#         comparison      = "COMPARISON_GREATER_THAN"
-#         threshold_value = 5
-#       }
-#     }
-#   ]
-# }
+module "database_connection_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "Database Connection Alert"
+  combiner              = "OR"
+  notification_channels = [var.notification_channel_email]
+  conditions = [
+    {
+      display_name = "Database Connection Errors"
+      condition_threshold = {
+        filter          = "resource.type=\"cloudsql_database\" AND severity=\"ERROR\""
+        duration        = "300s"
+        comparison      = "COMPARISON_GREATER_THAN"
+        threshold_value = 5
+      }
+    }
+  ]
+}

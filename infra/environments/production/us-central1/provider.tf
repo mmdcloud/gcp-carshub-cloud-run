@@ -10,10 +10,10 @@ terraform {
       version = "~> 4.0"
     }
   }
-  backend "gcs" {
-    bucket = "carshub-terraform-state"
-    prefix = "prod"
-  }
+  # backend "gcs" {
+  #   bucket = "carshub-terraform-state"
+  #   prefix = "prod"
+  # }
 }
 
 provider "google" {
