@@ -769,6 +769,18 @@ module "backend_uptime_check" {
 }
 
 # -----------------------------------------------------------------------------------------
+# Email notification channel
+# -----------------------------------------------------------------------------------------
+resource "google_monitoring_notification_channel" "email_alerts" {
+  display_name = "Email Alerts"
+  type         = "email"
+  labels = {
+    email_address = var.notification_channel_email
+  }
+  enabled = true
+}
+
+# -----------------------------------------------------------------------------------------
 # Observability Metrics for Production Monitoring
 # -----------------------------------------------------------------------------------------
 module "http_4xx_errors" {
@@ -823,7 +835,7 @@ module "high_error_rate_alert" {
   source                = "../../../modules/observability/alerts"
   display_name          = "High Error Rate Alert"
   combiner              = "OR"
-  notification_channels = [var.notification_channel_email]
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
   conditions = [
     {
       display_name = "HTTP 5xx Error Rate"
@@ -841,7 +853,7 @@ module "database_connection_alert" {
   source                = "../../../modules/observability/alerts"
   display_name          = "Database Connection Alert"
   combiner              = "OR"
-  notification_channels = [var.notification_channel_email]
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
   conditions = [
     {
       display_name = "Database Connection Errors"
