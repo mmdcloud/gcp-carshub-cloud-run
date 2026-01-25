@@ -882,3 +882,655 @@ module "database_connection_alert" {
     }
   ]
 }
+
+# -----------------------------------------------------------------------------------------
+# Additional Observability Metrics for Production Monitoring
+# -----------------------------------------------------------------------------------------
+
+# Cloud Run Performance Metrics
+module "cloud_run_high_latency" {
+  source       = "../../../modules/observability/metrics"
+  name         = "cloud_run_high_latency"
+  filter       = <<-EOT
+    resource.type="cloud_run_revision"
+    metric.type="run.googleapis.com/request_latencies"
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "DISTRIBUTION"
+  display_name = "Cloud Run High Latency Requests"
+  label_extractors = {
+    "service_name" = "EXTRACT(resource.labels.service_name)"
+    "revision_name" = "EXTRACT(resource.labels.revision_name)"
+  }
+}
+
+module "cloud_run_container_cpu" {
+  source       = "../../../modules/observability/metrics"
+  name         = "cloud_run_container_cpu"
+  filter       = <<-EOT
+    resource.type="cloud_run_revision"
+    metric.type="run.googleapis.com/container/cpu/utilizations"
+  EOT
+  metric_kind  = "GAUGE"
+  value_type   = "DOUBLE"
+  display_name = "Cloud Run Container CPU Utilization"
+  label_extractors = {
+    "service_name" = "EXTRACT(resource.labels.service_name)"
+  }
+}
+
+module "cloud_run_container_memory" {
+  source       = "../../../modules/observability/metrics"
+  name         = "cloud_run_container_memory"
+  filter       = <<-EOT
+    resource.type="cloud_run_revision"
+    metric.type="run.googleapis.com/container/memory/utilizations"
+  EOT
+  metric_kind  = "GAUGE"
+  value_type   = "DOUBLE"
+  display_name = "Cloud Run Container Memory Utilization"
+  label_extractors = {
+    "service_name" = "EXTRACT(resource.labels.service_name)"
+  }
+}
+
+module "cloud_run_startup_latency" {
+  source       = "../../../modules/observability/metrics"
+  name         = "cloud_run_startup_latency"
+  filter       = <<-EOT
+    resource.type="cloud_run_revision"
+    metric.type="run.googleapis.com/container/startup_latencies"
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "DISTRIBUTION"
+  display_name = "Cloud Run Container Startup Latency"
+  label_extractors = {
+    "service_name" = "EXTRACT(resource.labels.service_name)"
+  }
+}
+
+# Database Performance Metrics
+module "database_cpu_utilization" {
+  source       = "../../../modules/observability/metrics"
+  name         = "database_cpu_utilization"
+  filter       = <<-EOT
+    resource.type="cloudsql_database"
+    metric.type="cloudsql.googleapis.com/database/cpu/utilization"
+  EOT
+  metric_kind  = "GAUGE"
+  value_type   = "DOUBLE"
+  display_name = "Cloud SQL CPU Utilization"
+  label_extractors = {
+    "database_id" = "EXTRACT(resource.labels.database_id)"
+  }
+}
+
+module "database_memory_utilization" {
+  source       = "../../../modules/observability/metrics"
+  name         = "database_memory_utilization"
+  filter       = <<-EOT
+    resource.type="cloudsql_database"
+    metric.type="cloudsql.googleapis.com/database/memory/utilization"
+  EOT
+  metric_kind  = "GAUGE"
+  value_type   = "DOUBLE"
+  display_name = "Cloud SQL Memory Utilization"
+  label_extractors = {
+    "database_id" = "EXTRACT(resource.labels.database_id)"
+  }
+}
+
+module "database_disk_utilization" {
+  source       = "../../../modules/observability/metrics"
+  name         = "database_disk_utilization"
+  filter       = <<-EOT
+    resource.type="cloudsql_database"
+    metric.type="cloudsql.googleapis.com/database/disk/utilization"
+  EOT
+  metric_kind  = "GAUGE"
+  value_type   = "DOUBLE"
+  display_name = "Cloud SQL Disk Utilization"
+  label_extractors = {
+    "database_id" = "EXTRACT(resource.labels.database_id)"
+  }
+}
+
+module "database_active_connections" {
+  source       = "../../../modules/observability/metrics"
+  name         = "database_active_connections"
+  filter       = <<-EOT
+    resource.type="cloudsql_database"
+    metric.type="cloudsql.googleapis.com/database/mysql/connections"
+  EOT
+  metric_kind  = "GAUGE"
+  value_type   = "INT64"
+  display_name = "Cloud SQL Active Connections"
+  label_extractors = {
+    "database_id" = "EXTRACT(resource.labels.database_id)"
+  }
+}
+
+module "database_slow_queries" {
+  source       = "../../../modules/observability/metrics"
+  name         = "database_slow_queries"
+  filter       = <<-EOT
+    resource.type="cloudsql_database"
+    (textPayload:"slow query" OR textPayload:"Query_time")
+    severity>="WARNING"
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "INT64"
+  display_name = "Database Slow Queries"
+  label_extractors = {
+    "database_id" = "EXTRACT(resource.labels.database_id)"
+  }
+}
+
+# Load Balancer Metrics
+module "lb_request_count" {
+  source       = "../../../modules/observability/metrics"
+  name         = "lb_request_count"
+  filter       = <<-EOT
+    resource.type="http_load_balancer"
+    httpRequest.requestMethod!=""
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "INT64"
+  display_name = "Load Balancer Request Count"
+  label_extractors = {
+    "url_map" = "EXTRACT(resource.labels.url_map_name)"
+    "method" = "EXTRACT(httpRequest.requestMethod)"
+  }
+}
+
+module "lb_latency" {
+  source       = "../../../modules/observability/metrics"
+  name         = "lb_latency"
+  filter       = <<-EOT
+    resource.type="http_load_balancer"
+    httpRequest.latency!=""
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "DISTRIBUTION"
+  display_name = "Load Balancer Latency"
+  label_extractors = {
+    "url_map" = "EXTRACT(resource.labels.url_map_name)"
+  }
+}
+
+# Cloud Armor Security Metrics
+module "cloud_armor_blocked_requests" {
+  source       = "../../../modules/observability/metrics"
+  name         = "cloud_armor_blocked_requests"
+  filter       = <<-EOT
+    resource.type="http_load_balancer"
+    jsonPayload.enforcedSecurityPolicy.name!=""
+    jsonPayload.enforcedSecurityPolicy.outcome="DENY"
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "INT64"
+  display_name = "Cloud Armor Blocked Requests"
+  label_extractors = {
+    "policy_name" = "EXTRACT(jsonPayload.enforcedSecurityPolicy.name)"
+    "rule_priority" = "EXTRACT(jsonPayload.enforcedSecurityPolicy.priority)"
+  }
+}
+
+# Cloud Function Metrics
+module "function_execution_count" {
+  source       = "../../../modules/observability/metrics"
+  name         = "function_execution_count"
+  filter       = <<-EOT
+    resource.type="cloud_function"
+    metric.type="cloudfunctions.googleapis.com/function/execution_count"
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "INT64"
+  display_name = "Cloud Function Execution Count"
+  label_extractors = {
+    "function_name" = "EXTRACT(resource.labels.function_name)"
+  }
+}
+
+module "function_execution_times" {
+  source       = "../../../modules/observability/metrics"
+  name         = "function_execution_times"
+  filter       = <<-EOT
+    resource.type="cloud_function"
+    metric.type="cloudfunctions.googleapis.com/function/execution_times"
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "DISTRIBUTION"
+  display_name = "Cloud Function Execution Times"
+  label_extractors = {
+    "function_name" = "EXTRACT(resource.labels.function_name)"
+  }
+}
+
+module "function_errors" {
+  source       = "../../../modules/observability/metrics"
+  name         = "function_errors"
+  filter       = <<-EOT
+    resource.type="cloud_function"
+    severity="ERROR"
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "INT64"
+  display_name = "Cloud Function Errors"
+  label_extractors = {
+    "function_name" = "EXTRACT(resource.labels.function_name)"
+  }
+}
+
+# Storage Metrics
+module "gcs_request_count" {
+  source       = "../../../modules/observability/metrics"
+  name         = "gcs_request_count"
+  filter       = <<-EOT
+    resource.type="gcs_bucket"
+    metric.type="storage.googleapis.com/api/request_count"
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "INT64"
+  display_name = "GCS Request Count"
+  label_extractors = {
+    "bucket_name" = "EXTRACT(resource.labels.bucket_name)"
+    "method" = "EXTRACT(metric.labels.method)"
+  }
+}
+
+# Application-Level Metrics
+module "application_errors" {
+  source       = "../../../modules/observability/metrics"
+  name         = "application_errors"
+  filter       = <<-EOT
+    resource.type="cloud_run_revision"
+    severity="ERROR"
+    (textPayload:"Exception" OR textPayload:"Error" OR jsonPayload.error!="")
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "INT64"
+  display_name = "Application Errors"
+  label_extractors = {
+    "service_name" = "EXTRACT(resource.labels.service_name)"
+    "severity" = "EXTRACT(severity)"
+  }
+}
+
+# -----------------------------------------------------------------------------------------
+# Enhanced Alerting Policies
+# -----------------------------------------------------------------------------------------
+
+# Cloud Run Performance Alerts
+module "cloud_run_high_cpu_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "Cloud Run High CPU Utilization"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+
+  conditions = [
+    {
+      display_name    = "CPU Utilization > 80%"
+      filter          = "resource.type=\"cloud_run_revision\" AND metric.type=\"run.googleapis.com/container/cpu/utilizations\""
+      duration        = "300s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0.80
+
+      aggregations = {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_MEAN"
+        cross_series_reducer = "REDUCE_MEAN"
+        group_by_fields      = ["resource.service_name"]
+      }
+    }
+  ]
+}
+
+module "cloud_run_high_memory_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "Cloud Run High Memory Utilization"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+
+  conditions = [
+    {
+      display_name    = "Memory Utilization > 85%"
+      filter          = "resource.type=\"cloud_run_revision\" AND metric.type=\"run.googleapis.com/container/memory/utilizations\""
+      duration        = "300s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0.85
+
+      aggregations = {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_MEAN"
+        cross_series_reducer = "REDUCE_MEAN"
+        group_by_fields      = ["resource.service_name"]
+      }
+    }
+  ]
+}
+
+module "cloud_run_high_latency_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "Cloud Run High Request Latency"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+
+  conditions = [
+    {
+      display_name    = "P95 Latency > 2 seconds"
+      filter          = "resource.type=\"cloud_run_revision\" AND metric.type=\"run.googleapis.com/request_latencies\""
+      duration        = "300s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 2000
+
+      aggregations = {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_DELTA"
+        cross_series_reducer = "REDUCE_PERCENTILE_95"
+        group_by_fields      = ["resource.service_name"]
+      }
+    }
+  ]
+}
+
+# Database Alerts
+module "database_high_cpu_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "Database High CPU Utilization"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+
+  conditions = [
+    {
+      display_name    = "CPU Utilization > 80%"
+      filter          = "resource.type=\"cloudsql_database\" AND metric.type=\"cloudsql.googleapis.com/database/cpu/utilization\""
+      duration        = "300s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0.80
+
+      aggregations = {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_MEAN"
+      }
+    }
+  ]
+}
+
+module "database_high_memory_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "Database High Memory Utilization"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+
+  conditions = [
+    {
+      display_name    = "Memory Utilization > 85%"
+      filter          = "resource.type=\"cloudsql_database\" AND metric.type=\"cloudsql.googleapis.com/database/memory/utilization\""
+      duration        = "300s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0.85
+
+      aggregations = {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_MEAN"
+      }
+    }
+  ]
+}
+
+module "database_high_disk_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "Database High Disk Utilization"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+
+  conditions = [
+    {
+      display_name    = "Disk Utilization > 80%"
+      filter          = "resource.type=\"cloudsql_database\" AND metric.type=\"cloudsql.googleapis.com/database/disk/utilization\""
+      duration        = "600s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0.80
+
+      aggregations = {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_MEAN"
+      }
+    }
+  ]
+}
+
+module "database_connection_pool_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "Database Connection Pool Near Limit"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+
+  conditions = [
+    {
+      display_name    = "Active Connections > 800 (80% of max 1000)"
+      filter          = "resource.type=\"cloudsql_database\" AND metric.type=\"cloudsql.googleapis.com/database/mysql/connections\""
+      duration        = "300s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 800
+
+      aggregations = {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_MEAN"
+      }
+    }
+  ]
+}
+
+module "database_slow_queries_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "Database Slow Queries Detected"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+
+  conditions = [
+    {
+      display_name    = "Slow Query Rate > 10/min"
+      filter          = "resource.type=\"cloudsql_database\" AND (textPayload:\"slow query\" OR textPayload:\"Query_time\") AND severity>=\"WARNING\""
+      duration        = "300s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 10
+
+      aggregations = {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_RATE"
+      }
+    }
+  ]
+}
+
+# Load Balancer Alerts
+module "lb_high_latency_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "Load Balancer High Latency"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+
+  conditions = [
+    {
+      display_name    = "P95 Latency > 3 seconds"
+      filter          = "resource.type=\"http_load_balancer\""
+      duration        = "300s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 3000
+
+      aggregations = {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_DELTA"
+        cross_series_reducer = "REDUCE_PERCENTILE_95"
+        group_by_fields      = ["resource.url_map_name"]
+      }
+    }
+  ]
+}
+
+module "http_4xx_rate_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "High 4xx Error Rate"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+
+  conditions = [
+    {
+      display_name    = "4xx Error Rate > 5%"
+      filter          = "resource.type=\"http_load_balancer\" AND httpRequest.status>=400 AND httpRequest.status<500"
+      duration        = "300s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0.05
+
+      aggregations = {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_RATE"
+        cross_series_reducer = "REDUCE_SUM"
+      }
+    }
+  ]
+}
+
+# Security Alerts
+module "cloud_armor_high_block_rate_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "Cloud Armor High Block Rate"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+
+  conditions = [
+    {
+      display_name    = "Blocked Requests > 100/min"
+      filter          = "resource.type=\"http_load_balancer\" AND jsonPayload.enforcedSecurityPolicy.outcome=\"DENY\""
+      duration        = "300s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 100
+
+      aggregations = {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_RATE"
+      }
+    }
+  ]
+}
+
+# Cloud Function Alerts
+module "function_error_rate_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "Cloud Function High Error Rate"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+
+  conditions = [
+    {
+      display_name    = "Function Error Rate > 5%"
+      filter          = "resource.type=\"cloud_function\" AND severity=\"ERROR\""
+      duration        = "300s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0.05
+
+      aggregations = {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_RATE"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["resource.function_name"]
+      }
+    }
+  ]
+}
+
+module "function_execution_time_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "Cloud Function High Execution Time"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+
+  conditions = [
+    {
+      display_name    = "P95 Execution Time > 30 seconds"
+      filter          = "resource.type=\"cloud_function\" AND metric.type=\"cloudfunctions.googleapis.com/function/execution_times\""
+      duration        = "300s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 30000
+
+      aggregations = {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_DELTA"
+        cross_series_reducer = "REDUCE_PERCENTILE_95"
+        group_by_fields      = ["resource.function_name"]
+      }
+    }
+  ]
+}
+
+# Uptime Check Alerts
+module "frontend_uptime_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "Frontend Service Down"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+
+  conditions = [
+    {
+      display_name    = "Uptime Check Failed"
+      filter          = "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND resource.label.check_id=\"${module.frontend_uptime_check.uptime_check_id}\""
+      duration        = "300s"
+      comparison      = "COMPARISON_LT"
+      threshold_value = 1
+
+      aggregations = {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_NEXT_OLDER"
+      }
+    }
+  ]
+}
+
+module "backend_uptime_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "Backend Service Down"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+
+  conditions = [
+    {
+      display_name    = "Uptime Check Failed"
+      filter          = "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND resource.label.check_id=\"${module.backend_uptime_check.uptime_check_id}\""
+      duration        = "300s"
+      comparison      = "COMPARISON_LT"
+      threshold_value = 1
+
+      aggregations = {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_NEXT_OLDER"
+      }
+    }
+  ]
+}
+
+# Application-Level Alert
+module "application_error_spike_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "Application Error Spike"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+
+  conditions = [
+    {
+      display_name    = "Error Rate Spike > 20/min"
+      filter          = "resource.type=\"cloud_run_revision\" AND severity=\"ERROR\""
+      duration        = "180s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 20
+
+      aggregations = {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_RATE"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["resource.service_name"]
+      }
+    }
+  ]
+}
