@@ -117,9 +117,8 @@ module "carshub_cloud_run_service_account" {
 # Cloud Armor WAF protection for Load Balancers
 # -----------------------------------------------------------------------------------------
 module "cloud_armor" {
-  source  = "GoogleCloudPlatform/cloud-armor/google"
-  version = "~> 5.0"
-
+  source                               = "GoogleCloudPlatform/cloud-armor/google"
+  version                              = "~> 5.0"
   project_id                           = data.google_project.project.project_id
   name                                 = "carshub-security-policy"
   description                          = "CarHub Cloud Armor security policy with WAF rules"
@@ -135,6 +134,10 @@ module "cloud_armor" {
       action      = "rate_based_ban"
       priority    = 1
       description = "Rate limiting rule"
+
+      # REQUIRED by the module (even though it feels redundant)
+      src_ip_ranges = ["*"]
+
       rate_limit_options = {
         conform_action = "allow"
         exceed_action  = "deny(429)"
@@ -143,8 +146,9 @@ module "cloud_armor" {
           count        = 100
           interval_sec = 60
         }
-        ban_duration_sec = 600 # Increased from 300
+        ban_duration_sec = 600
       }
+
       match = {
         versioned_expr = "SRC_IPS_V1"
         config = {
@@ -155,9 +159,10 @@ module "cloud_armor" {
 
     # Block known bad IPs (you should maintain this list)
     "block_bad_ips" = {
-      action      = "deny(403)"
-      priority    = 10
-      description = "Block known malicious IPs"
+      action        = "deny(403)"
+      priority      = 10
+      description   = "Block known malicious IPs"
+      src_ip_ranges = ["*"]
       match = {
         versioned_expr = "SRC_IPS_V1"
         config = {
@@ -171,12 +176,16 @@ module "cloud_armor" {
 
     # Geographic restrictions (if needed)
     "geo_blocking" = {
-      action      = "deny(403)"
-      priority    = 11
-      description = "Block traffic from specific countries"
+      action        = "deny(403)"
+      priority      = 11
+      description   = "Block traffic from specific countries"
+      src_ip_ranges = ["*"]
       match = {
         expr = {
-          expression = "origin.region_code in ['CN', 'RU']" # Example: block China, Russia
+          expression = "origin.region_code in ['CN', 'RU']"
+        }
+        config = {
+          src_ip_ranges = ["*"]
         }
       }
     }
@@ -836,14 +845,17 @@ module "high_error_rate_alert" {
   display_name          = "High Error Rate Alert"
   combiner              = "OR"
   notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+
   conditions = [
     {
-      display_name = "HTTP 5xx Error Rate"
-      condition_threshold = {
-        filter          = "resource.type=\"http_load_balancer\" AND httpRequest.status>=500"
-        duration        = "300s"
-        comparison      = "COMPARISON_GREATER_THAN"
-        threshold_value = 10
+      display_name    = "HTTP 5xx Error Rate"
+      filter          = "resource.type=\"http_load_balancer\" AND httpRequest.status>=500"
+      duration        = "300s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 10
+      aggregations = {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_RATE"
       }
     }
   ]
@@ -854,14 +866,18 @@ module "database_connection_alert" {
   display_name          = "Database Connection Alert"
   combiner              = "OR"
   notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+
   conditions = [
     {
-      display_name = "Database Connection Errors"
-      condition_threshold = {
-        filter          = "resource.type=\"cloudsql_database\" AND severity=\"ERROR\""
-        duration        = "300s"
-        comparison      = "COMPARISON_GREATER_THAN"
-        threshold_value = 5
+      display_name    = "Database Connection Errors"
+      filter          = "resource.type=\"cloudsql_database\" AND severity=\"ERROR\""
+      duration        = "300s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 5
+
+      aggregations = {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_RATE"
       }
     }
   ]
