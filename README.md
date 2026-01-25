@@ -1,4 +1,4 @@
-# CarsHub - Cloud-Native Infrastructure on Google Cloud Platform
+# 🚀 CarsHub - Cloud-Native Infrastructure on Google Cloud Platform
 
 [![Terraform](https://img.shields.io/badge/Terraform-1.5+-623CE4?logo=terraform)](https://www.terraform.io/)
 [![Google Cloud](https://img.shields.io/badge/Google%20Cloud-Platform-4285F4?logo=google-cloud)](https://cloud.google.com/)
