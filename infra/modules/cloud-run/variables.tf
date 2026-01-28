@@ -21,8 +21,8 @@ variable "volumes" {
 }
 variable "containers" {
   type = list(object({
-    image = string
-    cpu_idle = bool
+    image             = string
+    cpu_idle          = bool
     startup_cpu_boost = bool
     env = list(object({
       name  = string
@@ -39,4 +39,8 @@ variable "containers" {
       mount_path = string
     }))
   }))
+}
+variable "labels" {
+  type    = map(string)
+  default = {}
 }

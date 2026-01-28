@@ -459,6 +459,14 @@ module "carshub_db" {
   ]
   database_flags = [
     {
+      name  = "general_log"
+      value = "on"
+    },
+    {
+      name  = "log_queries_not_using_indexes"
+      value = "on"
+    },
+    {
       name  = "max_connections"
       value = "1000"
     },
@@ -899,7 +907,7 @@ module "cloud_run_high_latency" {
   value_type   = "DISTRIBUTION"
   display_name = "Cloud Run High Latency Requests"
   label_extractors = {
-    "service_name" = "EXTRACT(resource.labels.service_name)"
+    "service_name"  = "EXTRACT(resource.labels.service_name)"
     "revision_name" = "EXTRACT(resource.labels.revision_name)"
   }
 }
@@ -1039,7 +1047,7 @@ module "lb_request_count" {
   display_name = "Load Balancer Request Count"
   label_extractors = {
     "url_map" = "EXTRACT(resource.labels.url_map_name)"
-    "method" = "EXTRACT(httpRequest.requestMethod)"
+    "method"  = "EXTRACT(httpRequest.requestMethod)"
   }
 }
 
@@ -1071,7 +1079,7 @@ module "cloud_armor_blocked_requests" {
   value_type   = "INT64"
   display_name = "Cloud Armor Blocked Requests"
   label_extractors = {
-    "policy_name" = "EXTRACT(jsonPayload.enforcedSecurityPolicy.name)"
+    "policy_name"   = "EXTRACT(jsonPayload.enforcedSecurityPolicy.name)"
     "rule_priority" = "EXTRACT(jsonPayload.enforcedSecurityPolicy.priority)"
   }
 }
@@ -1135,7 +1143,7 @@ module "gcs_request_count" {
   display_name = "GCS Request Count"
   label_extractors = {
     "bucket_name" = "EXTRACT(resource.labels.bucket_name)"
-    "method" = "EXTRACT(metric.labels.method)"
+    "method"      = "EXTRACT(metric.labels.method)"
   }
 }
 
@@ -1153,7 +1161,7 @@ module "application_errors" {
   display_name = "Application Errors"
   label_extractors = {
     "service_name" = "EXTRACT(resource.labels.service_name)"
-    "severity" = "EXTRACT(severity)"
+    "severity"     = "EXTRACT(severity)"
   }
 }
 
@@ -1466,49 +1474,49 @@ module "function_execution_time_alert" {
 }
 
 # Uptime Check Alerts
-module "frontend_uptime_alert" {
-  source                = "../../../modules/observability/alerts"
-  display_name          = "Frontend Service Down"
-  combiner              = "OR"
-  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+# module "frontend_uptime_alert" {
+#   source                = "../../../modules/observability/alerts"
+#   display_name          = "Frontend Service Down"
+#   combiner              = "OR"
+#   notification_channels = [google_monitoring_notification_channel.email_alerts.id]
 
-  conditions = [
-    {
-      display_name    = "Uptime Check Failed"
-      filter          = "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND resource.label.check_id=\"${module.frontend_uptime_check.uptime_check_id}\""
-      duration        = "300s"
-      comparison      = "COMPARISON_LT"
-      threshold_value = 1
+#   conditions = [
+#     {
+#       display_name    = "Uptime Check Failed"
+#       filter          = "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND resource.label.check_id=\"${module.frontend_uptime_check.uptime_check_id}\""
+#       duration        = "300s"
+#       comparison      = "COMPARISON_LT"
+#       threshold_value = 1
 
-      aggregations = {
-        alignment_period   = "60s"
-        per_series_aligner = "ALIGN_NEXT_OLDER"
-      }
-    }
-  ]
-}
+#       aggregations = {
+#         alignment_period   = "60s"
+#         per_series_aligner = "ALIGN_NEXT_OLDER"
+#       }
+#     }
+#   ]
+# }
 
-module "backend_uptime_alert" {
-  source                = "../../../modules/observability/alerts"
-  display_name          = "Backend Service Down"
-  combiner              = "OR"
-  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+# module "backend_uptime_alert" {
+#   source                = "../../../modules/observability/alerts"
+#   display_name          = "Backend Service Down"
+#   combiner              = "OR"
+#   notification_channels = [google_monitoring_notification_channel.email_alerts.id]
 
-  conditions = [
-    {
-      display_name    = "Uptime Check Failed"
-      filter          = "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND resource.label.check_id=\"${module.backend_uptime_check.uptime_check_id}\""
-      duration        = "300s"
-      comparison      = "COMPARISON_LT"
-      threshold_value = 1
+#   conditions = [
+#     {
+#       display_name    = "Uptime Check Failed"
+#       filter          = "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND resource.label.check_id=\"${module.backend_uptime_check.uptime_check_id}\""
+#       duration        = "300s"
+#       comparison      = "COMPARISON_LT"
+#       threshold_value = 1
 
-      aggregations = {
-        alignment_period   = "60s"
-        per_series_aligner = "ALIGN_NEXT_OLDER"
-      }
-    }
-  ]
-}
+#       aggregations = {
+#         alignment_period   = "60s"
+#         per_series_aligner = "ALIGN_NEXT_OLDER"
+#       }
+#     }
+#   ]
+# }
 
 # Application-Level Alert
 module "application_error_spike_alert" {
