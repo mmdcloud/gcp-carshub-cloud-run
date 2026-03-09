@@ -2,10 +2,6 @@ variable "location" {
   type = string
 }
 
-variable "backup_location" {
-  type = string
-}
-
 variable "project_id" {
   type        = string
   description = "GCP Project ID"
@@ -27,4 +23,9 @@ variable "notification_channel_email" {
 variable "environment" {
   type        = string
   description = "Environment name"
+}
+
+variable "domain" {
+  type        = string
+  description = "Domain name"
 }

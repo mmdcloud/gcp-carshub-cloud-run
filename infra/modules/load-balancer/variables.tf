@@ -17,3 +17,8 @@ variable "backends" {
 variable "backend_service_name" {}
 variable "backend_service_protocol" {}
 variable "backend_service_timeout" {}
+variable "ssl_certificates" {
+  description = "List of SSL certificate self_links. If provided, HTTPS proxy is used."
+  type        = list(string)
+  default     = []
+}
