@@ -59,5 +59,5 @@ resource "google_compute_global_forwarding_rule" "global_forwarding_rule" {
   load_balancing_scheme = var.forwarding_scheme
   ip_address            = google_compute_global_address.global_address.address
   port_range            = var.forwarding_port_range
-  target                = length(var.ssl_certificates) > 0 ? google_compute_target_https_proxy.target_https_proxy[0].self_link : google_compute_target_http_proxy.target_http_proxy[0].self_link
+  target                = length(var.ssl_certificates) > 0 ? one(google_compute_target_https_proxy.target_https_proxy).self_link : google_compute_target_http_proxy.target_http_proxy.self_link
 }

@@ -250,7 +250,7 @@ module "cloud_armor" {
 }
 
 # -----------------------------------------------------------------------------------------
-# 2. SECURITY: SSL/TLS Configuration
+# SECURITY: SSL/TLS Configuration
 # -----------------------------------------------------------------------------------------
 resource "google_compute_managed_ssl_certificate" "carshub_frontend_ssl_cert" {
   name = "carshub-frontend-ssl-cert"
