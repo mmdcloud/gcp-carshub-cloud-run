@@ -116,121 +116,118 @@ module "carshub_cloud_run_service_account" {
 # -----------------------------------------------------------------------------------------
 # Cloud Armor WAF protection for Load Balancers
 # -----------------------------------------------------------------------------------------
-# -----------------------------------------------------------------------------------------
-# Cloud Armor WAF protection for Load Balancers
-# -----------------------------------------------------------------------------------------
-module "cloud_armor" {
-  source  = "GoogleCloudPlatform/cloud-armor/google"
-  version = "~> 5.0"
+# module "cloud_armor" {
+#   source  = "GoogleCloudPlatform/cloud-armor/google"
+#   version = "~> 5.0"
 
-  project_id  = data.google_project.project.project_id
-  name        = "carshub-security-policy"
-  description = "CarHub Cloud Armor security policy with WAF rules"
+#   project_id  = data.google_project.project.project_id
+#   name        = "carshub-security-policy"
+#   description = "CarHub Cloud Armor security policy with WAF rules"
 
-  default_rule_action = "allow"
-  type                = "CLOUD_ARMOR"
+#   default_rule_action = "allow"
+#   type                = "CLOUD_ARMOR"
 
-  layer_7_ddos_defense_enable          = true
-  layer_7_ddos_defense_rule_visibility = "STANDARD"
-  user_ip_request_headers              = ["True-Client-IP"]
+#   layer_7_ddos_defense_enable          = true
+#   layer_7_ddos_defense_rule_visibility = "STANDARD"
+#   user_ip_request_headers              = ["True-Client-IP"]
 
-  security_rules = {
-    "rate_limit_rule" = {
-      action        = "rate_based_ban"
-      priority      = 1
-      description   = "Rate limiting rule"
-      src_ip_ranges = ["*"]
+#   security_rules = {
+#     "rate_limit_rule" = {
+#       action        = "rate_based_ban"
+#       priority      = 1
+#       description   = "Rate limiting rule"
+#       src_ip_ranges = ["*"]
 
-      rate_limit_options = {
-        conform_action = "allow"
-        exceed_action  = "deny(429)"
-        enforce_on_key = "IP"
-        ban_duration_sec = 600
+#       rate_limit_options = {
+#         conform_action = "allow"
+#         exceed_action  = "deny(429)"
+#         enforce_on_key = "IP"
+#         ban_duration_sec = 600
 
-        # Correct field names for module v5.x
-        rate_limit_http_request_count        = 100
-        rate_limit_http_request_interval_sec = 60
-        ban_http_request_count               = 1000
-        ban_http_request_interval_sec        = 600
-      }
+#         # Correct field names for module v5.x
+#         rate_limit_http_request_count        = 100
+#         rate_limit_http_request_interval_sec = 60
+#         ban_http_request_count               = 1000
+#         ban_http_request_interval_sec        = 600
+#       }
 
-      match = {
-        versioned_expr = "SRC_IPS_V1"
-        config = {
-          src_ip_ranges = ["*"]
-        }
-      }
-    }
-  }
+#       match = {
+#         versioned_expr = "SRC_IPS_V1"
+#         config = {
+#           src_ip_ranges = ["*"]
+#         }
+#       }
+#     }
+#   }
 
-  # geo_blocking uses CEL expression — must live in custom_rules, not security_rules
-  custom_rules = {
-    "geo_blocking" = {
-      action      = "deny(403)"
-      priority    = 10
-      description = "Block traffic from specific countries"
-      expression  = "origin.region_code in ['CN', 'RU']"
-    }
-  }
+#   # geo_blocking uses CEL expression — must live in custom_rules, not security_rules
+#   custom_rules = {
+#     "geo_blocking" = {
+#       action      = "deny(403)"
+#       priority    = 10
+#       description = "Block traffic from specific countries"
+#       expression  = "origin.region_code in ['CN', 'RU']"
+#     }
+#   }
 
-  pre_configured_rules = {
-    "xss-stable_level_2" = {
-      action            = "deny(403)"
-      priority          = 2
-      target_rule_set   = "xss-v33-stable"
-      sensitivity_level = 2
-    }
+#   pre_configured_rules = {
+#     "xss-stable_level_2" = {
+#       action            = "deny(403)"
+#       priority          = 2
+#       target_rule_set   = "xss-v33-stable"
+#       sensitivity_level = 2
+#     }
 
-    "sqli-stable_level_2" = {
-      action            = "deny(403)"
-      priority          = 3
-      target_rule_set   = "sqli-v33-stable"
-      sensitivity_level = 2
-    }
+#     "sqli-stable_level_2" = {
+#       action            = "deny(403)"
+#       priority          = 3
+#       target_rule_set   = "sqli-v33-stable"
+#       sensitivity_level = 2
+#     }
 
-    "lfi-stable_level_2" = {
-      action            = "deny(403)"
-      priority          = 4
-      target_rule_set   = "lfi-v33-stable"
-      sensitivity_level = 2
-    }
+#     "lfi-stable_level_2" = {
+#       action            = "deny(403)"
+#       priority          = 4
+#       target_rule_set   = "lfi-v33-stable"
+#       sensitivity_level = 2
+#     }
 
-    "rce-stable_level_2" = {
-      action            = "deny(403)"
-      priority          = 5
-      target_rule_set   = "rce-v33-stable"
-      sensitivity_level = 2
-    }
+#     "rce-stable_level_2" = {
+#       action            = "deny(403)"
+#       priority          = 5
+#       target_rule_set   = "rce-v33-stable"
+#       sensitivity_level = 2
+#     }
 
-    "rfi-stable_level_2" = {
-      action            = "deny(403)"
-      priority          = 6
-      target_rule_set   = "rfi-v33-stable"
-      sensitivity_level = 2
-    }
+#     "rfi-stable_level_2" = {
+#       action            = "deny(403)"
+#       priority          = 6
+#       target_rule_set   = "rfi-v33-stable"
+#       sensitivity_level = 2
+#     }
 
-    "scannerdetection-stable_level_2" = {
-      action            = "deny(403)"
-      priority          = 7
-      target_rule_set   = "scannerdetection-v33-stable"
-      sensitivity_level = 2
-    }
+#     "scannerdetection-stable_level_2" = {
+#       action            = "deny(403)"
+#       priority          = 7
+#       target_rule_set   = "scannerdetection-v33-stable"
+#       sensitivity_level = 2
+#     }
 
-    "protocolattack-stable_level_2" = {
-      action            = "deny(403)"
-      priority          = 8
-      target_rule_set   = "protocolattack-v33-stable"
-      sensitivity_level = 2
-    }
+#     "protocolattack-stable_level_2" = {
+#       action            = "deny(403)"
+#       priority          = 8
+#       target_rule_set   = "protocolattack-v33-stable"
+#       sensitivity_level = 2
+#     }
 
-    "sessionfixation-stable_level_2" = {
-      action            = "deny(403)"
-      priority          = 9
-      target_rule_set   = "sessionfixation-v33-stable"
-      sensitivity_level = 2
-    }
-  }
-}
+#     "sessionfixation-stable_level_2" = {
+#       action            = "deny(403)"
+#       priority          = 9
+#       target_rule_set   = "sessionfixation-v33-stable"
+#       sensitivity_level = 2
+#     }
+#   }
+# }
 
 # -----------------------------------------------------------------------------------------
 # SECURITY: SSL/TLS Configuration
@@ -337,7 +334,7 @@ module "carshub_media_bucket" {
       topic_id = module.carshub_media_bucket_pubsub.topic_id
     }
   ]
-  force_destroy               = false
+  force_destroy               = true
   uniform_bucket_level_access = true
 }
 
@@ -436,7 +433,7 @@ module "carshub_db" {
   disk_autoresize             = true
   disk_autoresize_limit       = 500 # GB
   ipv4_enabled                = false
-  deletion_protection_enabled = true
+  deletion_protection_enabled = false
   backup_configuration = [
     {
       enabled                        = true
@@ -501,7 +498,7 @@ module "carshub_run_iam_permissions" {
 
 module "carshub_frontend_service" {
   source                           = "../../../modules/cloud-run"
-  deletion_protection              = true
+  deletion_protection              = false
   ingress                          = "INGRESS_TRAFFIC_ALL"
   vpc_connector_name               = module.carshub_vpc_connectors.vpc_connectors[0].id
   service_account                  = module.carshub_cloud_run_service_account.sa_email
@@ -531,7 +528,7 @@ module "carshub_frontend_service" {
 
 module "carshub_backend_service" {
   source                           = "../../../modules/cloud-run"
-  deletion_protection              = true
+  deletion_protection              = false
   vpc_connector_name               = module.carshub_vpc_connectors.vpc_connectors[0].id
   ingress                          = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
   service_account                  = module.carshub_cloud_run_service_account.sa_email
@@ -672,7 +669,7 @@ module "carshub_frontend_service_lb" {
   backend_service_name     = "carshub-frontend-compute"
   backend_service_protocol = "HTTP"
   backend_service_timeout  = 30
-  security_policy          = module.cloud_armor.policy.id
+  # security_policy          = module.cloud_armor.policy.id
   ssl_certificates         = [google_compute_managed_ssl_certificate.carshub_frontend_ssl_cert.id]
   backends = [
     {
@@ -695,7 +692,7 @@ module "carshub_backend_service_lb" {
   backend_service_name     = "carshub-backend-compute"
   backend_service_protocol = "HTTP"
   backend_service_timeout  = 30
-  security_policy          = module.cloud_armor.policy.id
+  # security_policy          = module.cloud_armor.policy.id
   ssl_certificates         = [google_compute_managed_ssl_certificate.carshub_backend_ssl_cert.id]
   backends = [
     {
@@ -798,11 +795,11 @@ module "http_4xx_errors" {
   value_type   = "INT64"
   display_name = "HTTP 4xx Errors"
   label_extractors = {
-    "status_code" = "EXTRACT(httpRequest.status)"
-    "url_map"     = "EXTRACT(resource.labels.url_map_name)"
+    "url_map" = "EXTRACT(resource.labels.url_map_name)"
   }
 }
 
+# HTTP 5xx errors
 module "http_5xx_errors" {
   source       = "../../../modules/observability/metrics"
   name         = "http_5xx_errors"
@@ -814,18 +811,18 @@ module "http_5xx_errors" {
   value_type   = "INT64"
   display_name = "HTTP 5xx Errors"
   label_extractors = {
-    "status_code" = "EXTRACT(httpRequest.status)"
-    "url_map"     = "EXTRACT(resource.labels.url_map_name)"
+    "url_map" = "EXTRACT(resource.labels.url_map_name)"
   }
 }
 
+# Database connection errors (log-based)
 module "database_connection_errors" {
-  source           = "../../../modules/observability/metrics"
-  name             = "database_connection_errors"
-  filter           = <<-EOT
+  source       = "../../../modules/observability/metrics"
+  name         = "database_connection_errors"
+  filter       = <<-EOT
     resource.type="cloudsql_database"
-    (textPayload:"connection" OR textPayload:"timeout" OR textPayload:"failed")
     severity="ERROR"
+    textPayload:"connection"
   EOT
   metric_kind      = "DELTA"
   value_type       = "INT64"
@@ -833,183 +830,14 @@ module "database_connection_errors" {
   label_extractors = {}
 }
 
-module "high_error_rate_alert" {
-  source                = "../../../modules/observability/alerts"
-  display_name          = "High Error Rate Alert"
-  combiner              = "OR"
-  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
-
-  conditions = [
-    {
-      display_name    = "HTTP 5xx Error Rate"
-      filter          = "resource.type=\"http_load_balancer\" AND httpRequest.status>=500"
-      duration        = "300s"
-      comparison      = "COMPARISON_GT"
-      threshold_value = 10
-      aggregations = {
-        alignment_period   = "60s"
-        per_series_aligner = "ALIGN_RATE"
-      }
-    }
-  ]
-}
-
-module "database_connection_alert" {
-  source                = "../../../modules/observability/alerts"
-  display_name          = "Database Connection Alert"
-  combiner              = "OR"
-  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
-
-  conditions = [
-    {
-      display_name    = "Database Connection Errors"
-      filter          = "resource.type=\"cloudsql_database\" AND severity=\"ERROR\""
-      duration        = "300s"
-      comparison      = "COMPARISON_GT"
-      threshold_value = 5
-
-      aggregations = {
-        alignment_period   = "60s"
-        per_series_aligner = "ALIGN_RATE"
-      }
-    }
-  ]
-}
-
-# -----------------------------------------------------------------------------------------
-# Additional Observability Metrics for Production Monitoring
-# -----------------------------------------------------------------------------------------
-
-# Cloud Run Performance Metrics
-module "cloud_run_high_latency" {
-  source       = "../../../modules/observability/metrics"
-  name         = "cloud_run_high_latency"
-  filter       = <<-EOT
-    resource.type="cloud_run_revision"
-    metric.type="run.googleapis.com/request_latencies"
-  EOT
-  metric_kind  = "DELTA"
-  value_type   = "DISTRIBUTION"
-  display_name = "Cloud Run High Latency Requests"
-  label_extractors = {
-    "service_name"  = "EXTRACT(resource.labels.service_name)"
-    "revision_name" = "EXTRACT(resource.labels.revision_name)"
-  }
-}
-
-module "cloud_run_container_cpu" {
-  source       = "../../../modules/observability/metrics"
-  name         = "cloud_run_container_cpu"
-  filter       = <<-EOT
-    resource.type="cloud_run_revision"
-    metric.type="run.googleapis.com/container/cpu/utilizations"
-  EOT
-  metric_kind  = "GAUGE"
-  value_type   = "DOUBLE"
-  display_name = "Cloud Run Container CPU Utilization"
-  label_extractors = {
-    "service_name" = "EXTRACT(resource.labels.service_name)"
-  }
-}
-
-module "cloud_run_container_memory" {
-  source       = "../../../modules/observability/metrics"
-  name         = "cloud_run_container_memory"
-  filter       = <<-EOT
-    resource.type="cloud_run_revision"
-    metric.type="run.googleapis.com/container/memory/utilizations"
-  EOT
-  metric_kind  = "GAUGE"
-  value_type   = "DOUBLE"
-  display_name = "Cloud Run Container Memory Utilization"
-  label_extractors = {
-    "service_name" = "EXTRACT(resource.labels.service_name)"
-  }
-}
-
-module "cloud_run_startup_latency" {
-  source       = "../../../modules/observability/metrics"
-  name         = "cloud_run_startup_latency"
-  filter       = <<-EOT
-    resource.type="cloud_run_revision"
-    metric.type="run.googleapis.com/container/startup_latencies"
-  EOT
-  metric_kind  = "DELTA"
-  value_type   = "DISTRIBUTION"
-  display_name = "Cloud Run Container Startup Latency"
-  label_extractors = {
-    "service_name" = "EXTRACT(resource.labels.service_name)"
-  }
-}
-
-# Database Performance Metrics
-module "database_cpu_utilization" {
-  source       = "../../../modules/observability/metrics"
-  name         = "database_cpu_utilization"
-  filter       = <<-EOT
-    resource.type="cloudsql_database"
-    metric.type="cloudsql.googleapis.com/database/cpu/utilization"
-  EOT
-  metric_kind  = "GAUGE"
-  value_type   = "DOUBLE"
-  display_name = "Cloud SQL CPU Utilization"
-  label_extractors = {
-    "database_id" = "EXTRACT(resource.labels.database_id)"
-  }
-}
-
-module "database_memory_utilization" {
-  source       = "../../../modules/observability/metrics"
-  name         = "database_memory_utilization"
-  filter       = <<-EOT
-    resource.type="cloudsql_database"
-    metric.type="cloudsql.googleapis.com/database/memory/utilization"
-  EOT
-  metric_kind  = "GAUGE"
-  value_type   = "DOUBLE"
-  display_name = "Cloud SQL Memory Utilization"
-  label_extractors = {
-    "database_id" = "EXTRACT(resource.labels.database_id)"
-  }
-}
-
-module "database_disk_utilization" {
-  source       = "../../../modules/observability/metrics"
-  name         = "database_disk_utilization"
-  filter       = <<-EOT
-    resource.type="cloudsql_database"
-    metric.type="cloudsql.googleapis.com/database/disk/utilization"
-  EOT
-  metric_kind  = "GAUGE"
-  value_type   = "DOUBLE"
-  display_name = "Cloud SQL Disk Utilization"
-  label_extractors = {
-    "database_id" = "EXTRACT(resource.labels.database_id)"
-  }
-}
-
-module "database_active_connections" {
-  source       = "../../../modules/observability/metrics"
-  name         = "database_active_connections"
-  filter       = <<-EOT
-    resource.type="cloudsql_database"
-    metric.type="cloudsql.googleapis.com/database/mysql/connections"
-  EOT
-  metric_kind  = "GAUGE"
-  value_type   = "INT64"
-  display_name = "Cloud SQL Active Connections"
-  label_extractors = {
-    "database_id" = "EXTRACT(resource.labels.database_id)"
-  }
-}
-
+# Database slow queries (log-based — textPayload OR not allowed, use two separate filters or single match)
 module "database_slow_queries" {
   source       = "../../../modules/observability/metrics"
   name         = "database_slow_queries"
   filter       = <<-EOT
     resource.type="cloudsql_database"
-    (textPayload:"slow query" OR textPayload:"Query_time")
     severity>="WARNING"
+    textPayload:"Query_time"
   EOT
   metric_kind  = "DELTA"
   value_type   = "INT64"
@@ -1019,87 +847,39 @@ module "database_slow_queries" {
   }
 }
 
-# Load Balancer Metrics
-module "lb_request_count" {
-  source       = "../../../modules/observability/metrics"
-  name         = "lb_request_count"
-  filter       = <<-EOT
-    resource.type="http_load_balancer"
-    httpRequest.requestMethod!=""
-  EOT
-  metric_kind  = "DELTA"
-  value_type   = "INT64"
-  display_name = "Load Balancer Request Count"
-  label_extractors = {
-    "url_map" = "EXTRACT(resource.labels.url_map_name)"
-    "method"  = "EXTRACT(httpRequest.requestMethod)"
-  }
-}
-
-module "lb_latency" {
-  source       = "../../../modules/observability/metrics"
-  name         = "lb_latency"
-  filter       = <<-EOT
-    resource.type="http_load_balancer"
-    httpRequest.latency!=""
-  EOT
-  metric_kind  = "DELTA"
-  value_type   = "DISTRIBUTION"
-  display_name = "Load Balancer Latency"
-  label_extractors = {
-    "url_map" = "EXTRACT(resource.labels.url_map_name)"
-  }
-}
-
-# Cloud Armor Security Metrics
+# Cloud Armor blocked requests (log-based)
 module "cloud_armor_blocked_requests" {
   source       = "../../../modules/observability/metrics"
   name         = "cloud_armor_blocked_requests"
   filter       = <<-EOT
     resource.type="http_load_balancer"
-    jsonPayload.enforcedSecurityPolicy.name!=""
     jsonPayload.enforcedSecurityPolicy.outcome="DENY"
   EOT
   metric_kind  = "DELTA"
   value_type   = "INT64"
   display_name = "Cloud Armor Blocked Requests"
   label_extractors = {
-    "policy_name"   = "EXTRACT(jsonPayload.enforcedSecurityPolicy.name)"
-    "rule_priority" = "EXTRACT(jsonPayload.enforcedSecurityPolicy.priority)"
+    "policy_name" = "EXTRACT(jsonPayload.enforcedSecurityPolicy.name)"
   }
 }
 
-# Cloud Function Metrics
-module "function_execution_count" {
+# Application errors (log-based)
+module "application_errors" {
   source       = "../../../modules/observability/metrics"
-  name         = "function_execution_count"
+  name         = "application_errors"
   filter       = <<-EOT
-    resource.type="cloud_function"
-    metric.type="cloudfunctions.googleapis.com/function/execution_count"
+    resource.type="cloud_run_revision"
+    severity="ERROR"
   EOT
   metric_kind  = "DELTA"
   value_type   = "INT64"
-  display_name = "Cloud Function Execution Count"
+  display_name = "Application Errors"
   label_extractors = {
-    "function_name" = "EXTRACT(resource.labels.function_name)"
+    "service_name" = "EXTRACT(resource.labels.service_name)"
   }
 }
 
-module "function_execution_times" {
-  source       = "../../../modules/observability/metrics"
-  name         = "function_execution_times"
-  filter       = <<-EOT
-    resource.type="cloud_function"
-    metric.type="cloudfunctions.googleapis.com/function/execution_times"
-  EOT
-  metric_kind  = "DELTA"
-  value_type   = "DISTRIBUTION"
-  display_name = "Cloud Function Execution Times"
-  label_extractors = {
-    "function_name" = "EXTRACT(resource.labels.function_name)"
-  }
-}
-
+# Cloud Function errors (log-based)
 module "function_errors" {
   source       = "../../../modules/observability/metrics"
   name         = "function_errors"
@@ -1115,46 +895,35 @@ module "function_errors" {
   }
 }
 
-# Storage Metrics
-module "gcs_request_count" {
+# LB request count (log-based)
+module "lb_request_count" {
   source       = "../../../modules/observability/metrics"
-  name         = "gcs_request_count"
+  name         = "lb_request_count"
   filter       = <<-EOT
-    resource.type="gcs_bucket"
-    metric.type="storage.googleapis.com/api/request_count"
+    resource.type="http_load_balancer"
+    httpRequest.requestMethod!=""
   EOT
   metric_kind  = "DELTA"
   value_type   = "INT64"
-  display_name = "GCS Request Count"
+  display_name = "Load Balancer Request Count"
   label_extractors = {
-    "bucket_name" = "EXTRACT(resource.labels.bucket_name)"
-    "method"      = "EXTRACT(metric.labels.method)"
+    "url_map" = "EXTRACT(resource.labels.url_map_name)"
   }
 }
 
-# Application-Level Metrics
-module "application_errors" {
-  source       = "../../../modules/observability/metrics"
-  name         = "application_errors"
-  filter       = <<-EOT
-    resource.type="cloud_run_revision"
-    severity="ERROR"
-    (textPayload:"Exception" OR textPayload:"Error" OR jsonPayload.error!="")
-  EOT
-  metric_kind  = "DELTA"
-  value_type   = "INT64"
-  display_name = "Application Errors"
-  label_extractors = {
-    "service_name" = "EXTRACT(resource.labels.service_name)"
-    "severity"     = "EXTRACT(severity)"
-  }
-}
+# NOTE: The following modules were REMOVED because they wrap native GCP metrics
+# inside google_logging_metric which is invalid — they don't exist in logs:
+#   cloud_run_container_cpu, cloud_run_container_memory, cloud_run_startup_latency,
+#   cloud_run_high_latency, database_cpu_utilization, database_memory_utilization,
+#   database_disk_utilization, database_active_connections, function_execution_count,
+#   function_execution_times, gcs_request_count, lb_latency, database_connection_pool_alert
+# These are queried directly via metric.type in alert policies below.
 
 # -----------------------------------------------------------------------------------------
-# Enhanced Alerting Policies
+# Alert Policies
 # -----------------------------------------------------------------------------------------
 
-# Cloud Run Performance Alerts
+# Cloud Run — CPU (native metric, GAUGE/DISTRIBUTION → ALIGN_PERCENTILE_99)
 module "cloud_run_high_cpu_alert" {
   source                = "../../../modules/observability/alerts"
   display_name          = "Cloud Run High CPU Utilization"
@@ -1171,14 +940,15 @@ module "cloud_run_high_cpu_alert" {
 
       aggregations = {
         alignment_period     = "60s"
-        per_series_aligner   = "ALIGN_MEAN"
+        per_series_aligner   = "ALIGN_PERCENTILE_99"
         cross_series_reducer = "REDUCE_MEAN"
-        group_by_fields      = ["resource.service_name"]
+        group_by_fields      = ["resource.labels.service_name"]
       }
     }
   ]
 }
 
+# Cloud Run — Memory (native metric, GAUGE/DISTRIBUTION → ALIGN_PERCENTILE_99)
 module "cloud_run_high_memory_alert" {
   source                = "../../../modules/observability/alerts"
   display_name          = "Cloud Run High Memory Utilization"
@@ -1195,14 +965,15 @@ module "cloud_run_high_memory_alert" {
 
       aggregations = {
         alignment_period     = "60s"
-        per_series_aligner   = "ALIGN_MEAN"
+        per_series_aligner   = "ALIGN_PERCENTILE_99"
         cross_series_reducer = "REDUCE_MEAN"
-        group_by_fields      = ["resource.service_name"]
+        group_by_fields      = ["resource.labels.service_name"]
       }
     }
   ]
 }
 
+# Cloud Run — Latency (DELTA/DISTRIBUTION → must use ALIGN_PERCENTILE_95)
 module "cloud_run_high_latency_alert" {
   source                = "../../../modules/observability/alerts"
   display_name          = "Cloud Run High Request Latency"
@@ -1219,15 +990,15 @@ module "cloud_run_high_latency_alert" {
 
       aggregations = {
         alignment_period     = "60s"
-        per_series_aligner   = "ALIGN_DELTA"
-        cross_series_reducer = "REDUCE_PERCENTILE_95"
-        group_by_fields      = ["resource.service_name"]
+        per_series_aligner   = "ALIGN_PERCENTILE_95"
+        cross_series_reducer = "REDUCE_MEAN"
+        group_by_fields      = ["resource.labels.service_name"]
       }
     }
   ]
 }
 
-# Database Alerts
+# Database — CPU
 module "database_high_cpu_alert" {
   source                = "../../../modules/observability/alerts"
   display_name          = "Database High CPU Utilization"
@@ -1250,6 +1021,7 @@ module "database_high_cpu_alert" {
   ]
 }
 
+# Database — Memory
 module "database_high_memory_alert" {
   source                = "../../../modules/observability/alerts"
   display_name          = "Database High Memory Utilization"
@@ -1272,6 +1044,7 @@ module "database_high_memory_alert" {
   ]
 }
 
+# Database — Disk
 module "database_high_disk_alert" {
   source                = "../../../modules/observability/alerts"
   display_name          = "Database High Disk Utilization"
@@ -1294,6 +1067,7 @@ module "database_high_disk_alert" {
   ]
 }
 
+# Database — Connection pool (correct metric type for PostgreSQL; swap for mysql_connections if MySQL)
 module "database_connection_pool_alert" {
   source                = "../../../modules/observability/alerts"
   display_name          = "Database Connection Pool Near Limit"
@@ -1302,8 +1076,8 @@ module "database_connection_pool_alert" {
 
   conditions = [
     {
-      display_name    = "Active Connections > 800 (80% of max 1000)"
-      filter          = "resource.type=\"cloudsql_database\" AND metric.type=\"cloudsql.googleapis.com/database/mysql/connections\""
+      display_name    = "Active Connections > 800"
+      filter          = "resource.type=\"cloudsql_database\" AND metric.type=\"cloudsql.googleapis.com/database/postgresql/num_backends\""
       duration        = "300s"
       comparison      = "COMPARISON_GT"
       threshold_value = 800
@@ -1316,6 +1090,7 @@ module "database_connection_pool_alert" {
   ]
 }
 
+# Database — Slow queries (alert on log-based metric created above)
 module "database_slow_queries_alert" {
   source                = "../../../modules/observability/alerts"
   display_name          = "Database Slow Queries Detected"
@@ -1325,7 +1100,7 @@ module "database_slow_queries_alert" {
   conditions = [
     {
       display_name    = "Slow Query Rate > 10/min"
-      filter          = "resource.type=\"cloudsql_database\" AND (textPayload:\"slow query\" OR textPayload:\"Query_time\") AND severity>=\"WARNING\""
+      filter          = "metric.type=\"logging.googleapis.com/user/database_slow_queries\" AND resource.type=\"cloudsql_database\""
       duration        = "300s"
       comparison      = "COMPARISON_GT"
       threshold_value = 10
@@ -1338,7 +1113,7 @@ module "database_slow_queries_alert" {
   ]
 }
 
-# Load Balancer Alerts
+# LB — Latency (correct resource type is https_lb_rule, metric is DELTA/DISTRIBUTION)
 module "lb_high_latency_alert" {
   source                = "../../../modules/observability/alerts"
   display_name          = "Load Balancer High Latency"
@@ -1348,58 +1123,102 @@ module "lb_high_latency_alert" {
   conditions = [
     {
       display_name    = "P95 Latency > 3 seconds"
-      filter          = "resource.type=\"http_load_balancer\""
+      filter          = "resource.type=\"https_lb_rule\" AND metric.type=\"loadbalancing.googleapis.com/https/total_latencies\""
       duration        = "300s"
       comparison      = "COMPARISON_GT"
       threshold_value = 3000
 
       aggregations = {
         alignment_period     = "60s"
-        per_series_aligner   = "ALIGN_DELTA"
-        cross_series_reducer = "REDUCE_PERCENTILE_95"
-        group_by_fields      = ["resource.url_map_name"]
+        per_series_aligner   = "ALIGN_PERCENTILE_95"
+        cross_series_reducer = "REDUCE_MEAN"
+        group_by_fields      = ["resource.labels.url_map_name"]
       }
     }
   ]
 }
 
+# LB — 4xx rate (alert on log-based metric)
 module "http_4xx_rate_alert" {
   source                = "../../../modules/observability/alerts"
   display_name          = "High 4xx Error Rate"
   combiner              = "OR"
   notification_channels = [google_monitoring_notification_channel.email_alerts.id]
-
   conditions = [
     {
-      display_name    = "4xx Error Rate > 5%"
-      filter          = "resource.type=\"http_load_balancer\" AND httpRequest.status>=400 AND httpRequest.status<500"
+      display_name    = "4xx Error Rate > 50/min"
+      filter          = "metric.type=\"logging.googleapis.com/user/http_4xx_errors\" AND resource.type=\"l7_lb_rule\""
       duration        = "300s"
       comparison      = "COMPARISON_GT"
-      threshold_value = 0.05
-
+      threshold_value = 50
       aggregations = {
-        alignment_period     = "60s"
-        per_series_aligner   = "ALIGN_RATE"
-        cross_series_reducer = "REDUCE_SUM"
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_RATE"
       }
     }
   ]
+  depends_on = [module.http_4xx_errors]
 }
 
-# Security Alerts
-module "cloud_armor_high_block_rate_alert" {
+# LB — 5xx / high error rate (alert on log-based metric)
+module "high_error_rate_alert" {
   source                = "../../../modules/observability/alerts"
-  display_name          = "Cloud Armor High Block Rate"
+  display_name          = "High Error Rate Alert"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+  conditions = [
+    {
+      display_name    = "HTTP 5xx Error Rate > 10/min"
+      filter          = "metric.type=\"logging.googleapis.com/user/http_5xx_errors\" AND resource.type=\"l7_lb_rule\""
+      duration        = "300s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 10
+      aggregations = {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_RATE"
+      }
+    }
+  ]
+  depends_on = [module.http_5xx_errors]
+}
+
+# Cloud Armor — high block rate (alert on log-based metric)
+# module "cloud_armor_high_block_rate_alert" {
+#   source                = "../../../modules/observability/alerts"
+#   display_name          = "Cloud Armor High Block Rate"
+#   combiner              = "OR"
+#   notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+
+#   conditions = [
+#     {
+#       display_name    = "Blocked Requests > 100/min"
+#       filter          = "metric.type=\"logging.googleapis.com/user/cloud_armor_blocked_requests\" AND resource.type=\"http_load_balancer\""
+#       duration        = "300s"
+#       comparison      = "COMPARISON_GT"
+#       threshold_value = 100
+
+#       aggregations = {
+#         alignment_period   = "60s"
+#         per_series_aligner = "ALIGN_RATE"
+#       }
+#     }
+#   ]
+# }
+
+# Database — connection errors (alert on log-based metric)
+module "database_connection_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "Database Connection Alert"
   combiner              = "OR"
   notification_channels = [google_monitoring_notification_channel.email_alerts.id]
 
   conditions = [
     {
-      display_name    = "Blocked Requests > 100/min"
-      filter          = "resource.type=\"http_load_balancer\" AND jsonPayload.enforcedSecurityPolicy.outcome=\"DENY\""
+      display_name    = "Database Connection Errors > 5/min"
+      filter          = "metric.type=\"logging.googleapis.com/user/database_connection_errors\" AND resource.type=\"cloudsql_database\""
       duration        = "300s"
       comparison      = "COMPARISON_GT"
-      threshold_value = 100
+      threshold_value = 5
 
       aggregations = {
         alignment_period   = "60s"
@@ -1409,31 +1228,31 @@ module "cloud_armor_high_block_rate_alert" {
   ]
 }
 
-# Cloud Function Alerts
+# Cloud Function — error rate (alert on log-based metric)
 module "function_error_rate_alert" {
   source                = "../../../modules/observability/alerts"
   display_name          = "Cloud Function High Error Rate"
   combiner              = "OR"
   notification_channels = [google_monitoring_notification_channel.email_alerts.id]
-
   conditions = [
     {
-      display_name    = "Function Error Rate > 5%"
-      filter          = "resource.type=\"cloud_function\" AND severity=\"ERROR\""
+      display_name    = "Function Error Rate > 5/min"
+      filter          = "metric.type=\"logging.googleapis.com/user/function_errors\" AND resource.type=\"cloud_function\""
       duration        = "300s"
       comparison      = "COMPARISON_GT"
-      threshold_value = 0.05
-
+      threshold_value = 5
       aggregations = {
         alignment_period     = "60s"
         per_series_aligner   = "ALIGN_RATE"
         cross_series_reducer = "REDUCE_SUM"
-        group_by_fields      = ["resource.function_name"]
+        group_by_fields      = ["resource.labels.function_name"]
       }
     }
   ]
+  depends_on = [module.function_errors]
 }
 
+# Cloud Function — execution time (DELTA/DISTRIBUTION → ALIGN_PERCENTILE_95)
 module "function_execution_time_alert" {
   source                = "../../../modules/observability/alerts"
   display_name          = "Cloud Function High Execution Time"
@@ -1450,15 +1269,15 @@ module "function_execution_time_alert" {
 
       aggregations = {
         alignment_period     = "60s"
-        per_series_aligner   = "ALIGN_DELTA"
-        cross_series_reducer = "REDUCE_PERCENTILE_95"
-        group_by_fields      = ["resource.function_name"]
+        per_series_aligner   = "ALIGN_PERCENTILE_95"
+        cross_series_reducer = "REDUCE_MEAN"
+        group_by_fields      = ["resource.labels.function_name"]
       }
     }
   ]
 }
 
-# Application-Level Alert
+# Application error spike (alert on log-based metric)
 module "application_error_spike_alert" {
   source                = "../../../modules/observability/alerts"
   display_name          = "Application Error Spike"
@@ -1468,7 +1287,7 @@ module "application_error_spike_alert" {
   conditions = [
     {
       display_name    = "Error Rate Spike > 20/min"
-      filter          = "resource.type=\"cloud_run_revision\" AND severity=\"ERROR\""
+      filter          = "metric.type=\"logging.googleapis.com/user/application_errors\" AND resource.type=\"cloud_run_revision\""
       duration        = "180s"
       comparison      = "COMPARISON_GT"
       threshold_value = 20
@@ -1477,7 +1296,7 @@ module "application_error_spike_alert" {
         alignment_period     = "60s"
         per_series_aligner   = "ALIGN_RATE"
         cross_series_reducer = "REDUCE_SUM"
-        group_by_fields      = ["resource.service_name"]
+        group_by_fields      = ["resource.labels.service_name"]
       }
     }
   ]
