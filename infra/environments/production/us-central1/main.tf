@@ -268,8 +268,17 @@ module "carshub_frontend_artifact_registry" {
   location      = var.location
   description   = "CarHub frontend repository"
   repository_id = "carshub-frontend"
-  shell_command = "bash ${path.cwd}/../../../../src/frontend/artifact_push.sh http://${module.carshub_backend_service_lb.ip_address} ${module.carshub_cdn.cdn_ip_address} ${data.google_project.project.project_id}"
   depends_on    = [module.carshub_backend_service, module.carshub_apis]
+}
+
+resource "null_resource" "build_and_push_frontend" {
+  provisioner "local-exec" {
+    command = "bash ${path.cwd}/../../../../src/frontend/artifact_push.sh http://${module.carshub_backend_service_lb.ip_address} ${module.carshub_cdn.cdn_ip_address} ${data.google_project.project.project_id}"
+  }
+
+  depends_on = [
+    module.carshub_frontend_artifact_registry,
+  ]
 }
 
 module "carshub_backend_artifact_registry" {
@@ -277,8 +286,17 @@ module "carshub_backend_artifact_registry" {
   location      = var.location
   description   = "CarHub backend repository"
   repository_id = "carshub-backend"
-  shell_command = "bash ${path.cwd}/../../../../src/backend/api/artifact_push.sh ${data.google_project.project.project_id}"
   depends_on    = [module.carshub_db, module.carshub_apis]
+}
+
+resource "null_resource" "build_and_push_backend" {
+  provisioner "local-exec" {
+    command = "bash ${path.cwd}/../../../../src/backend/api/artifact_push.sh ${data.google_project.project.project_id}"
+  }
+
+  depends_on = [
+    module.carshub_backend_artifact_registry,
+  ]
 }
 
 # -----------------------------------------------------------------------------------------
@@ -670,7 +688,7 @@ module "carshub_frontend_service_lb" {
   backend_service_protocol = "HTTP"
   backend_service_timeout  = 30
   # security_policy          = module.cloud_armor.policy.id
-  ssl_certificates         = [google_compute_managed_ssl_certificate.carshub_frontend_ssl_cert.id]
+  ssl_certificates = [google_compute_managed_ssl_certificate.carshub_frontend_ssl_cert.id]
   backends = [
     {
       backend = module.carshub_frontend_service_neg.id
@@ -693,7 +711,7 @@ module "carshub_backend_service_lb" {
   backend_service_protocol = "HTTP"
   backend_service_timeout  = 30
   # security_policy          = module.cloud_armor.policy.id
-  ssl_certificates         = [google_compute_managed_ssl_certificate.carshub_backend_ssl_cert.id]
+  ssl_certificates = [google_compute_managed_ssl_certificate.carshub_backend_ssl_cert.id]
   backends = [
     {
       backend = module.carshub_backend_service_neg.id
@@ -817,9 +835,9 @@ module "http_5xx_errors" {
 
 # Database connection errors (log-based)
 module "database_connection_errors" {
-  source       = "../../../modules/observability/metrics"
-  name         = "database_connection_errors"
-  filter       = <<-EOT
+  source           = "../../../modules/observability/metrics"
+  name             = "database_connection_errors"
+  filter           = <<-EOT
     resource.type="cloudsql_database"
     severity="ERROR"
     textPayload:"connection"

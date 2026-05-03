@@ -24,3 +24,8 @@ variable "environment" {
   type        = string
   description = "Environment name"
 }
+
+variable "domain" {
+  type        = string
+  description = "Domain name"
+}
