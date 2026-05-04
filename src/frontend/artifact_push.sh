@@ -9,5 +9,5 @@ CDN_URL=$2
 EOL
 
 docker buildx build --tag carshub-frontend --file ./Dockerfile .
-docker tag carshub-frontend:latest us-central1-docker.pkg.dev/$3/carshub-frontend/carshub-frontend:latest
-docker push us-central1-docker.pkg.dev/$3/carshub-frontend/carshub-frontend:latest
+docker tag carshub-frontend:latest us-central1-docker.pkg.dev/$3/carshub-frontend-$4/carshub-frontend:latest
+docker push us-central1-docker.pkg.dev/$3/carshub-frontend-$4/carshub-frontend:latest

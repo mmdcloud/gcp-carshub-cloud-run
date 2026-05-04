@@ -273,7 +273,7 @@ module "carshub_frontend_artifact_registry" {
 
 resource "null_resource" "build_and_push_frontend" {
   provisioner "local-exec" {
-    command = "bash ${path.cwd}/../../../../src/frontend/artifact_push.sh http://${module.carshub_backend_service_lb.ip_address} ${module.carshub_cdn.cdn_ip_address} ${data.google_project.project.project_id}"
+    command = "bash ${path.cwd}/../../../../src/frontend/artifact_push.sh http://${module.carshub_backend_service_lb.ip_address} ${module.carshub_cdn.cdn_ip_address} ${data.google_project.project.project_id} ${var.environment}"
   }
 
   depends_on = [
@@ -291,7 +291,7 @@ module "carshub_backend_artifact_registry" {
 
 resource "null_resource" "build_and_push_backend" {
   provisioner "local-exec" {
-    command = "bash ${path.cwd}/../../../../src/backend/api/artifact_push.sh ${data.google_project.project.project_id}"
+    command = "bash ${path.cwd}/../../../../src/backend/api/artifact_push.sh ${data.google_project.project.project_id} ${var.environment}"
   }
 
   depends_on = [
@@ -538,7 +538,7 @@ module "carshub_frontend_service" {
       volume_mounts     = []
       cpu_idle          = true
       startup_cpu_boost = true
-      image             = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-frontend/carshub-frontend:latest"
+      image             = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-frontend/carshub-frontend-${var.environment}:latest"
     }
   ]
   depends_on = [module.carshub_frontend_artifact_registry, module.carshub_apis, module.carshub_cloud_run_service_account]
@@ -569,7 +569,7 @@ module "carshub_backend_service" {
   ]
   containers = [
     {
-      image             = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-backend/carshub-backend:latest"
+      image             = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-backend/carshub-backend-${var.environment}:latest"
       cpu_idle          = true
       startup_cpu_boost = true
       volume_mounts = [
