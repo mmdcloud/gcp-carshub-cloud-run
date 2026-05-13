@@ -688,7 +688,7 @@ module "carshub_backend_service_neg" {
 # -----------------------------------------------------------------------------------------
 module "carshub_frontend_service_lb" {
   source                   = "../../../modules/load-balancer"
-  forwarding_port_range    = "443"
+  forwarding_port_range    = "80"
   forwarding_rule_name     = "carshub-frontend-service-global-forwarding-rule-${var.environment}"
   forwarding_scheme        = "EXTERNAL"
   global_address_type      = "EXTERNAL"
@@ -699,7 +699,7 @@ module "carshub_frontend_service_lb" {
   backend_service_protocol = "HTTP"
   backend_service_timeout  = 30
   # security_policy          = module.cloud_armor.policy.id
-  ssl_certificates = [google_compute_managed_ssl_certificate.carshub_frontend_ssl_cert.id]
+  # ssl_certificates = [google_compute_managed_ssl_certificate.carshub_frontend_ssl_cert.id]
   backends = [
     {
       backend = module.carshub_frontend_service_neg.id
@@ -722,7 +722,7 @@ module "carshub_backend_service_lb" {
   backend_service_protocol = "HTTP"
   backend_service_timeout  = 30
   # security_policy          = module.cloud_armor.policy.id
-  ssl_certificates = [google_compute_managed_ssl_certificate.carshub_backend_ssl_cert.id]
+  # ssl_certificates = [google_compute_managed_ssl_certificate.carshub_backend_ssl_cert.id]
   backends = [
     {
       backend = module.carshub_backend_service_neg.id
