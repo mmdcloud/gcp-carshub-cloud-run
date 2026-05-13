@@ -281,6 +281,8 @@ resource "null_resource" "build_and_push_frontend" {
 
   depends_on = [
     module.carshub_frontend_artifact_registry,
+    module.carshub_backend_service_lb,
+    module.carshub_cdn
   ]
 }
 
@@ -301,7 +303,7 @@ resource "null_resource" "build_and_push_backend" {
   }
 
   depends_on = [
-    module.carshub_backend_artifact_registry,
+    module.carshub_backend_artifact_registry
   ]
 }
 
