@@ -1,6 +1,3 @@
-############################################
-# Locals: EXTERNAL vs INTERNAL switch
-############################################
 locals {
   is_external = var.load_balancer_type == "EXTERNAL"
   is_internal = var.load_balancer_type == "INTERNAL"
@@ -271,6 +268,28 @@ resource "google_compute_security_policy" "this" {
 ############################################
 # Backend services
 ############################################
+resource "google_compute_backend_bucket" "this" {
+  for_each = var.backend_buckets
+
+  project     = var.project_id
+  name        = "${var.name}-${each.key}-backend-bucket"
+  description = each.value.description
+  bucket_name = each.value.bucket_name
+  enable_cdn  = each.value.enable_cdn
+
+  dynamic "cdn_policy" {
+    for_each = each.value.enable_cdn ? [1] : []
+    content {
+      cache_mode        = each.value.cdn_policy.cache_mode
+      default_ttl       = each.value.cdn_policy.default_ttl
+      client_ttl        = each.value.cdn_policy.client_ttl
+      max_ttl           = each.value.cdn_policy.max_ttl
+      negative_caching  = each.value.cdn_policy.negative_caching
+      serve_while_stale = each.value.cdn_policy.serve_while_stale
+    }
+  }
+}
+
 resource "google_compute_backend_service" "this" {
   for_each = local.is_external ? var.backends : {}
 
@@ -282,8 +301,8 @@ resource "google_compute_backend_service" "this" {
   timeout_sec = each.value.timeout_sec
 
   load_balancing_scheme = "EXTERNAL_MANAGED"
-  health_checks          = [local.health_check_ids[each.key]]
-  security_policy        = var.enable_cloud_armor ? google_compute_security_policy.this[0].id : null
+  health_checks         = [local.health_check_ids[each.key]]
+  security_policy       = var.enable_cloud_armor ? google_compute_security_policy.this[0].id : null
 
   enable_cdn = each.value.enable_cdn
 
@@ -333,7 +352,7 @@ resource "google_compute_region_backend_service" "this" {
   timeout_sec = each.value.timeout_sec
 
   load_balancing_scheme = "INTERNAL_MANAGED"
-  health_checks          = [local.health_check_ids[each.key]]
+  health_checks         = [local.health_check_ids[each.key]]
 
   dynamic "backend" {
     for_each = each.value.groups
@@ -354,23 +373,45 @@ resource "google_compute_region_backend_service" "this" {
   }
 }
 
-locals {
-  backend_service_ids = {
-    for k, v in var.backends :
-    k => local.is_external ? google_compute_backend_service.this[k].id : google_compute_region_backend_service.this[k].id
-  }
-}
-
 ############################################
 # URL map (path/host routing)
 ############################################
 locals {
-  default_backend_key = one([for k, v in var.backends : k if v.is_default])
+  # Unified view of both backend flavors so the url_map doesn't care whether
+  # a given routing key is a backend_service or a backend_bucket.
+  backend_meta = merge(
+    { for k, v in var.backends : k => {
+      is_default    = v.is_default
+      host_patterns = v.host_patterns
+      path_patterns = v.path_patterns
+      }
+    },
+    { for k, v in var.backend_buckets : k => {
+      is_default    = v.is_default
+      host_patterns = v.host_patterns
+      path_patterns = v.path_patterns
+      }
+    }
+  )
 
+  # Resolves a routing key to the right resource's id, regardless of whether
+  # it's backed by google_compute_backend_service or google_compute_backend_bucket.
+  service_ids = merge(
+    { for k, v in google_compute_backend_service.this : k => v.id },
+    { for k, v in google_compute_region_backend_service.this : k => v.id },
+    { for k, v in google_compute_backend_bucket.this : k => v.id }
+  )
+
+  default_backend_key = one([for k, v in local.backend_meta : k if v.is_default])
+
+  # host_rule/path_matcher entries only for non-default backends with explicit
+  # host or path patterns configured.
   routed_backends = {
-    for k, v in var.backends :
+    for k, v in local.backend_meta :
     k => v if !v.is_default && (length(v.host_patterns) > 0 || length(v.path_patterns) > 0)
   }
+
+  backend_key_overlap = setintersection(toset(keys(var.backends)), toset(keys(var.backend_buckets)))
 }
 
 resource "google_compute_url_map" "this" {
@@ -378,7 +419,7 @@ resource "google_compute_url_map" "this" {
 
   project         = var.project_id
   name            = "${var.name}-url-map"
-  default_service = local.backend_service_ids[local.default_backend_key]
+  default_service = local.service_ids[local.default_backend_key]
 
   dynamic "host_rule" {
     for_each = local.routed_backends
@@ -392,13 +433,13 @@ resource "google_compute_url_map" "this" {
     for_each = local.routed_backends
     content {
       name            = "${path_matcher.key}-matcher"
-      default_service = local.backend_service_ids[path_matcher.key]
+      default_service = local.service_ids[path_matcher.key]
 
       dynamic "path_rule" {
         for_each = length(path_matcher.value.path_patterns) > 0 ? [1] : []
         content {
           paths   = path_matcher.value.path_patterns
-          service = local.backend_service_ids[path_matcher.key]
+          service = local.service_ids[path_matcher.key]
         }
       }
     }
@@ -411,7 +452,7 @@ resource "google_compute_region_url_map" "this" {
   project         = var.project_id
   region          = var.region
   name            = "${var.name}-url-map"
-  default_service = local.backend_service_ids[local.default_backend_key]
+  default_service = local.service_ids[local.default_backend_key]
 
   dynamic "host_rule" {
     for_each = local.routed_backends
@@ -425,13 +466,13 @@ resource "google_compute_region_url_map" "this" {
     for_each = local.routed_backends
     content {
       name            = "${path_matcher.key}-matcher"
-      default_service = local.backend_service_ids[path_matcher.key]
+      default_service = local.service_ids[path_matcher.key]
 
       dynamic "path_rule" {
         for_each = length(path_matcher.value.path_patterns) > 0 ? [1] : []
         content {
           paths   = path_matcher.value.path_patterns
-          service = local.backend_service_ids[path_matcher.key]
+          service = local.service_ids[path_matcher.key]
         }
       }
     }
@@ -450,9 +491,9 @@ resource "google_compute_url_map" "https_redirect" {
   name    = "${var.name}-https-redirect"
 
   default_url_redirect {
-    https_redirect          = true
-    redirect_response_code  = "MOVED_PERMANENTLY_DEFAULT"
-    strip_query              = false
+    https_redirect         = true
+    redirect_response_code = "MOVED_PERMANENTLY_DEFAULT"
+    strip_query            = false
   }
 }
 
@@ -464,9 +505,9 @@ resource "google_compute_region_url_map" "https_redirect" {
   name    = "${var.name}-https-redirect"
 
   default_url_redirect {
-    https_redirect          = true
-    redirect_response_code  = "MOVED_PERMANENTLY_DEFAULT"
-    strip_query              = false
+    https_redirect         = true
+    redirect_response_code = "MOVED_PERMANENTLY_DEFAULT"
+    strip_query            = false
   }
 }
 
@@ -501,29 +542,29 @@ resource "google_compute_region_target_http_proxy" "this" {
 resource "google_compute_global_forwarding_rule" "http" {
   count = local.is_external && var.enable_http ? 1 : 0
 
-  project                = var.project_id
-  name                   = "${var.name}-http-fr"
-  target                 = google_compute_target_http_proxy.this[0].id
-  port_range             = "80"
-  ip_address              = local.lb_ipv4_address
-  load_balancing_scheme  = "EXTERNAL_MANAGED"
-  labels                 = var.labels
+  project               = var.project_id
+  name                  = "${var.name}-http-fr"
+  target                = google_compute_target_http_proxy.this[0].id
+  port_range            = "80"
+  ip_address            = local.lb_ipv4_address
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+  labels                = var.labels
 }
 
 resource "google_compute_forwarding_rule" "http" {
   count = local.is_internal && var.enable_http ? 1 : 0
 
-  project                = var.project_id
-  region                  = var.region
-  name                    = "${var.name}-http-fr"
-  network                 = var.network
-  subnetwork              = var.subnetwork
-  target                   = google_compute_region_target_http_proxy.this[0].id
-  port_range               = "80"
-  ip_address               = local.lb_ipv4_address
-  load_balancing_scheme   = "INTERNAL_MANAGED"
-  allow_global_access      = var.allow_global_access
-  labels                   = var.labels
+  project               = var.project_id
+  region                = var.region
+  name                  = "${var.name}-http-fr"
+  network               = var.network
+  subnetwork            = var.subnetwork
+  target                = google_compute_region_target_http_proxy.this[0].id
+  port_range            = "80"
+  ip_address            = local.lb_ipv4_address
+  load_balancing_scheme = "INTERNAL_MANAGED"
+  allow_global_access   = var.allow_global_access
+  labels                = var.labels
 }
 
 ############################################
@@ -577,62 +618,62 @@ locals {
 resource "google_compute_target_https_proxy" "this" {
   count = local.is_external && var.enable_ssl ? 1 : 0
 
-  project           = var.project_id
-  name              = "${var.name}-https-proxy"
-  url_map           = local.url_map_id
-  ssl_certificates  = local.ssl_certificate_ids
-  ssl_policy        = local.ssl_policy_id
+  project          = var.project_id
+  name             = "${var.name}-https-proxy"
+  url_map          = local.url_map_id
+  ssl_certificates = local.ssl_certificate_ids
+  ssl_policy       = local.ssl_policy_id
 }
 
 resource "google_compute_region_target_https_proxy" "this" {
   count = local.is_internal && var.enable_ssl ? 1 : 0
 
-  project           = var.project_id
-  region            = var.region
-  name              = "${var.name}-https-proxy"
-  url_map           = local.url_map_id
-  ssl_certificates  = local.ssl_certificate_ids
-  ssl_policy        = local.ssl_policy_id
+  project          = var.project_id
+  region           = var.region
+  name             = "${var.name}-https-proxy"
+  url_map          = local.url_map_id
+  ssl_certificates = local.ssl_certificate_ids
+  ssl_policy       = local.ssl_policy_id
 }
 
 resource "google_compute_global_forwarding_rule" "https" {
   count = local.is_external && var.enable_ssl ? 1 : 0
 
-  project                = var.project_id
-  name                   = "${var.name}-https-fr"
-  target                 = google_compute_target_https_proxy.this[0].id
-  port_range             = "443"
-  ip_address              = local.lb_ipv4_address
-  load_balancing_scheme  = "EXTERNAL_MANAGED"
-  labels                 = var.labels
+  project               = var.project_id
+  name                  = "${var.name}-https-fr"
+  target                = google_compute_target_https_proxy.this[0].id
+  port_range            = "443"
+  ip_address            = local.lb_ipv4_address
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+  labels                = var.labels
 }
 
 resource "google_compute_global_forwarding_rule" "https_ipv6" {
   count = local.is_external && var.enable_ssl && var.enable_ipv6 ? 1 : 0
 
-  project                = var.project_id
-  name                   = "${var.name}-https-fr-ipv6"
-  target                 = google_compute_target_https_proxy.this[0].id
-  port_range             = "443"
-  ip_address              = var.create_static_ip ? google_compute_global_address.ipv6[0].address : null
-  load_balancing_scheme  = "EXTERNAL_MANAGED"
-  labels                 = var.labels
+  project               = var.project_id
+  name                  = "${var.name}-https-fr-ipv6"
+  target                = google_compute_target_https_proxy.this[0].id
+  port_range            = "443"
+  ip_address            = var.create_static_ip ? google_compute_global_address.ipv6[0].address : null
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+  labels                = var.labels
 }
 
 resource "google_compute_forwarding_rule" "https" {
   count = local.is_internal && var.enable_ssl ? 1 : 0
 
-  project                = var.project_id
-  region                  = var.region
-  name                    = "${var.name}-https-fr"
-  network                 = var.network
-  subnetwork              = var.subnetwork
-  target                   = google_compute_region_target_https_proxy.this[0].id
-  port_range               = "443"
-  ip_address               = local.lb_ipv4_address
-  load_balancing_scheme   = "INTERNAL_MANAGED"
-  allow_global_access      = var.allow_global_access
-  labels                   = var.labels
+  project               = var.project_id
+  region                = var.region
+  name                  = "${var.name}-https-fr"
+  network               = var.network
+  subnetwork            = var.subnetwork
+  target                = google_compute_region_target_https_proxy.this[0].id
+  port_range            = "443"
+  ip_address            = local.lb_ipv4_address
+  load_balancing_scheme = "INTERNAL_MANAGED"
+  allow_global_access   = var.allow_global_access
+  labels                = var.labels
 }
 
 ############################################
@@ -642,5 +683,16 @@ check "at_least_one_listener" {
   assert {
     condition     = var.enable_http || var.enable_ssl
     error_message = "Both var.enable_http and var.enable_ssl are false — the load balancer would have no forwarding rule to receive traffic on."
+  }
+}
+
+check "backend_and_backend_bucket_keys_valid" {
+  assert {
+    condition     = length(local.backend_key_overlap) == 0
+    error_message = "The following keys exist in both var.backends and var.backend_buckets: ${join(", ", local.backend_key_overlap)}. Each routing key must be backed by exactly one of a backend_service or a backend_bucket, not both."
+  }
+  assert {
+    condition     = length([for k, v in local.backend_meta : k if v.is_default]) == 1
+    error_message = "Exactly one entry across var.backends and var.backend_buckets must have is_default = true."
   }
 }
