@@ -114,122 +114,6 @@ module "carshub_cloud_run_service_account" {
 }
 
 # -----------------------------------------------------------------------------------------
-# Cloud Armor WAF protection for Load Balancers
-# -----------------------------------------------------------------------------------------
-# module "cloud_armor" {
-#   source  = "GoogleCloudPlatform/cloud-armor/google"
-#   version = "~> 5.0"
-
-#   project_id  = data.google_project.project.project_id
-#   name        = "carshub-security-policy"
-#   description = "CarHub Cloud Armor security policy with WAF rules"
-
-#   default_rule_action = "allow"
-#   type                = "CLOUD_ARMOR"
-
-#   layer_7_ddos_defense_enable          = true
-#   layer_7_ddos_defense_rule_visibility = "STANDARD"
-#   user_ip_request_headers              = ["True-Client-IP"]
-
-#   security_rules = {
-#     "rate_limit_rule" = {
-#       action        = "rate_based_ban"
-#       priority      = 1
-#       description   = "Rate limiting rule"
-#       src_ip_ranges = ["*"]
-
-#       rate_limit_options = {
-#         conform_action = "allow"
-#         exceed_action  = "deny(429)"
-#         enforce_on_key = "IP"
-#         ban_duration_sec = 600
-
-#         # Correct field names for module v5.x
-#         rate_limit_http_request_count        = 100
-#         rate_limit_http_request_interval_sec = 60
-#         ban_http_request_count               = 1000
-#         ban_http_request_interval_sec        = 600
-#       }
-
-#       match = {
-#         versioned_expr = "SRC_IPS_V1"
-#         config = {
-#           src_ip_ranges = ["*"]
-#         }
-#       }
-#     }
-#   }
-
-#   # geo_blocking uses CEL expression — must live in custom_rules, not security_rules
-#   custom_rules = {
-#     "geo_blocking" = {
-#       action      = "deny(403)"
-#       priority    = 10
-#       description = "Block traffic from specific countries"
-#       expression  = "origin.region_code in ['CN', 'RU']"
-#     }
-#   }
-
-#   pre_configured_rules = {
-#     "xss-stable_level_2" = {
-#       action            = "deny(403)"
-#       priority          = 2
-#       target_rule_set   = "xss-v33-stable"
-#       sensitivity_level = 2
-#     }
-
-#     "sqli-stable_level_2" = {
-#       action            = "deny(403)"
-#       priority          = 3
-#       target_rule_set   = "sqli-v33-stable"
-#       sensitivity_level = 2
-#     }
-
-#     "lfi-stable_level_2" = {
-#       action            = "deny(403)"
-#       priority          = 4
-#       target_rule_set   = "lfi-v33-stable"
-#       sensitivity_level = 2
-#     }
-
-#     "rce-stable_level_2" = {
-#       action            = "deny(403)"
-#       priority          = 5
-#       target_rule_set   = "rce-v33-stable"
-#       sensitivity_level = 2
-#     }
-
-#     "rfi-stable_level_2" = {
-#       action            = "deny(403)"
-#       priority          = 6
-#       target_rule_set   = "rfi-v33-stable"
-#       sensitivity_level = 2
-#     }
-
-#     "scannerdetection-stable_level_2" = {
-#       action            = "deny(403)"
-#       priority          = 7
-#       target_rule_set   = "scannerdetection-v33-stable"
-#       sensitivity_level = 2
-#     }
-
-#     "protocolattack-stable_level_2" = {
-#       action            = "deny(403)"
-#       priority          = 8
-#       target_rule_set   = "protocolattack-v33-stable"
-#       sensitivity_level = 2
-#     }
-
-#     "sessionfixation-stable_level_2" = {
-#       action            = "deny(403)"
-#       priority          = 9
-#       target_rule_set   = "sessionfixation-v33-stable"
-#       sensitivity_level = 2
-#     }
-#   }
-# }
-
-# -----------------------------------------------------------------------------------------
 # SECURITY: SSL/TLS Configuration
 # -----------------------------------------------------------------------------------------
 resource "google_compute_managed_ssl_certificate" "carshub_frontend_ssl_cert" {
@@ -402,21 +286,6 @@ resource "google_storage_bucket_iam_binding" "storage_iam_binding" {
 # -----------------------------------------------------------------------------------------
 # CDN Configuration
 # -----------------------------------------------------------------------------------------
-# module "carshub_cdn" {
-#   source                = "../../../modules/cdn"
-#   bucket_name           = module.carshub_media_bucket.bucket_name
-#   enable_cdn            = true
-#   description           = "Content delivery network for media files"
-#   name                  = "carshub-media-cdn-${var.environment}"
-#   forwarding_port_range = "80"
-#   forwarding_rule_name  = "carshub-cdn-global-forwarding-rule-${var.environment}"
-#   forwarding_scheme     = "EXTERNAL"
-#   global_address_type   = "EXTERNAL"
-#   url_map_name          = "carshub-cdn-compute-url-map-${var.environment}"
-#   global_address_name   = "carshub-cdn-lb-global-address-${var.environment}"
-#   target_proxy_name     = "carshub-cdn-target-proxy-${var.environment}"
-# }
-
 module "carshub_cdn" {
   source     = "../../../modules/lb"
   project_id = var.project_id
@@ -694,32 +563,10 @@ module "carshub_backend_service_neg" {
 # -----------------------------------------------------------------------------------------
 # Load Balancer Configuration
 # -----------------------------------------------------------------------------------------
-# module "carshub_frontend_service_lb" {
-#   source                   = "../../../modules/load-balancer"
-#   forwarding_port_range    = "443"
-#   forwarding_rule_name     = "carshub-frontend-service-global-forwarding-rule-${var.environment}"
-#   forwarding_scheme        = "EXTERNAL"
-#   global_address_type      = "EXTERNAL"
-#   url_map_name             = "carshub-frontend-service-compute-url-map-${var.environment}"
-#   global_address_name      = "carshub-frontend-service-lb-global-address-${var.environment}"
-#   target_proxy_name        = "carshub-frontend-service-target-proxy-${var.environment}"
-#   backend_service_name     = "carshub-frontend-compute-${var.environment}"
-#   backend_service_protocol = "HTTP"
-#   backend_service_timeout  = 30
-#   # security_policy          = module.cloud_armor.policy.id
-#   ssl_certificates = [google_compute_managed_ssl_certificate.carshub_frontend_ssl_cert.id]
-#   backends = [
-#     {
-#       backend = module.carshub_frontend_service_neg.id
-#     }
-#   ]
-#   depends_on = [module.carshub_frontend_service]
-# }
-
 module "carshub_frontend_service_lb" {
   source             = "../../../modules/lb"
   project_id         = var.project_id
-  name               = "carshub-frontend-lb"
+  name               = "carshub-frontend-lb-${var.environment}"
   load_balancer_type = "EXTERNAL"
   region             = var.location  
   create_proxy_only_subnet = false
@@ -746,32 +593,10 @@ module "carshub_frontend_service_lb" {
   depends_on              = [module.carshub_frontend_service]
 }
 
-# Backend Load Balancer with HTTP
-# module "carshub_backend_service_lb" {
-#   source                   = "../../../modules/load-balancer"
-#   forwarding_port_range    = "80"
-#   forwarding_rule_name     = "carshub-backend-service-global-forwarding-rule-${var.environment}"
-#   forwarding_scheme        = "EXTERNAL"
-#   global_address_type      = "EXTERNAL"
-#   url_map_name             = "carshub-backend-service-compute-url-map-${var.environment}"
-#   global_address_name      = "carshub-backend-service-lb-global-address-${var.environment}"
-#   target_proxy_name        = "carshub-backend-service-target-proxy-${var.environment}"
-#   backend_service_name     = "carshub-backend-compute-${var.environment}"
-#   backend_service_protocol = "HTTP"
-#   backend_service_timeout  = 30
-#   # security_policy          = module.cloud_armor.policy.id
-#   ssl_certificates = [google_compute_managed_ssl_certificate.carshub_backend_ssl_cert.id]
-#   backends = [
-#     {
-#       backend = module.carshub_backend_service_neg.id
-#     }
-#   ]
-#   depends_on = [module.carshub_backend_service]
-# }
 module "carshub_backend_service_lb" {
   source             = "../../../modules/lb"
   project_id         = var.project_id
-  name               = "carshub-backend-lb"
+  name               = "carshub-backend-lb-${var.environment}"
   load_balancer_type = "EXTERNAL"
   region             = var.location  
   create_proxy_only_subnet = false
@@ -1007,14 +832,6 @@ module "lb_request_count" {
     "url_map" = "EXTRACT(resource.labels.url_map_name)"
   }
 }
-
-# NOTE: The following modules were REMOVED because they wrap native GCP metrics
-# inside google_logging_metric which is invalid — they don't exist in logs:
-#   cloud_run_container_cpu, cloud_run_container_memory, cloud_run_startup_latency,
-#   cloud_run_high_latency, database_cpu_utilization, database_memory_utilization,
-#   database_disk_utilization, database_active_connections, function_execution_count,
-#   function_execution_times, gcs_request_count, lb_latency, database_connection_pool_alert
-# These are queried directly via metric.type in alert policies below.
 
 # -----------------------------------------------------------------------------------------
 # Alert Policies
