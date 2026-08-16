@@ -273,7 +273,7 @@ module "carshub_frontend_artifact_registry" {
 
 resource "null_resource" "build_and_push_frontend" {
   provisioner "local-exec" {
-    command = "bash ${path.cwd}/../../../../src/frontend/artifact_push.sh http://${module.carshub_backend_service_lb.ip_address} ${module.carshub_cdn.cdn_ip_address} ${data.google_project.project.project_id}"
+    command = "bash ${path.cwd}/../../../../src/frontend/artifact_push.sh http://${module.carshub_backend_service_lb.ip_address} ${module.carshub_cdn.lb_ip_address} ${data.google_project.project.project_id}"
   }
 
   depends_on = [
@@ -402,19 +402,38 @@ resource "google_storage_bucket_iam_binding" "storage_iam_binding" {
 # -----------------------------------------------------------------------------------------
 # CDN Configuration
 # -----------------------------------------------------------------------------------------
+# module "carshub_cdn" {
+#   source                = "../../../modules/cdn"
+#   bucket_name           = module.carshub_media_bucket.bucket_name
+#   enable_cdn            = true
+#   description           = "Content delivery network for media files"
+#   name                  = "carshub-media-cdn-${var.environment}"
+#   forwarding_port_range = "80"
+#   forwarding_rule_name  = "carshub-cdn-global-forwarding-rule-${var.environment}"
+#   forwarding_scheme     = "EXTERNAL"
+#   global_address_type   = "EXTERNAL"
+#   url_map_name          = "carshub-cdn-compute-url-map-${var.environment}"
+#   global_address_name   = "carshub-cdn-lb-global-address-${var.environment}"
+#   target_proxy_name     = "carshub-cdn-target-proxy-${var.environment}"
+# }
+
 module "carshub_cdn" {
-  source                = "../../../modules/cdn"
-  bucket_name           = module.carshub_media_bucket.bucket_name
-  enable_cdn            = true
-  description           = "Content delivery network for media files"
-  name                  = "carshub-media-cdn-${var.environment}"
-  forwarding_port_range = "80"
-  forwarding_rule_name  = "carshub-cdn-global-forwarding-rule-${var.environment}"
-  forwarding_scheme     = "EXTERNAL"
-  global_address_type   = "EXTERNAL"
-  url_map_name          = "carshub-cdn-compute-url-map-${var.environment}"
-  global_address_name   = "carshub-cdn-lb-global-address-${var.environment}"
-  target_proxy_name     = "carshub-cdn-target-proxy-${var.environment}"
+  source     = "../../../modules/lb"
+  project_id = var.project_id
+  name       = "carshub-media-cdn-${var.environment}"
+
+  backend_buckets = {
+    website = {
+      is_default  = true
+      bucket_name = module.carshub_media_bucket.bucket_name
+    }
+  }
+
+  enable_ssl              = false
+  enable_http             = true
+  managed_ssl_certificate = false
+  enable_cloud_armor      = false
+  depends_on              = [module.carshub_media_bucket]
 }
 
 # -----------------------------------------------------------------------------------------
@@ -675,49 +694,110 @@ module "carshub_backend_service_neg" {
 # -----------------------------------------------------------------------------------------
 # Load Balancer Configuration
 # -----------------------------------------------------------------------------------------
+# module "carshub_frontend_service_lb" {
+#   source                   = "../../../modules/load-balancer"
+#   forwarding_port_range    = "443"
+#   forwarding_rule_name     = "carshub-frontend-service-global-forwarding-rule-${var.environment}"
+#   forwarding_scheme        = "EXTERNAL"
+#   global_address_type      = "EXTERNAL"
+#   url_map_name             = "carshub-frontend-service-compute-url-map-${var.environment}"
+#   global_address_name      = "carshub-frontend-service-lb-global-address-${var.environment}"
+#   target_proxy_name        = "carshub-frontend-service-target-proxy-${var.environment}"
+#   backend_service_name     = "carshub-frontend-compute-${var.environment}"
+#   backend_service_protocol = "HTTP"
+#   backend_service_timeout  = 30
+#   # security_policy          = module.cloud_armor.policy.id
+#   ssl_certificates = [google_compute_managed_ssl_certificate.carshub_frontend_ssl_cert.id]
+#   backends = [
+#     {
+#       backend = module.carshub_frontend_service_neg.id
+#     }
+#   ]
+#   depends_on = [module.carshub_frontend_service]
+# }
+
 module "carshub_frontend_service_lb" {
-  source                   = "../../../modules/load-balancer"
-  forwarding_port_range    = "443"
-  forwarding_rule_name     = "carshub-frontend-service-global-forwarding-rule-${var.environment}"
-  forwarding_scheme        = "EXTERNAL"
-  global_address_type      = "EXTERNAL"
-  url_map_name             = "carshub-frontend-service-compute-url-map-${var.environment}"
-  global_address_name      = "carshub-frontend-service-lb-global-address-${var.environment}"
-  target_proxy_name        = "carshub-frontend-service-target-proxy-${var.environment}"
-  backend_service_name     = "carshub-frontend-compute-${var.environment}"
-  backend_service_protocol = "HTTP"
-  backend_service_timeout  = 30
-  # security_policy          = module.cloud_armor.policy.id
-  ssl_certificates = [google_compute_managed_ssl_certificate.carshub_frontend_ssl_cert.id]
-  backends = [
-    {
-      backend = module.carshub_frontend_service_neg.id
+  source             = "../../../modules/lb"
+  project_id         = var.project_id
+  name               = "carshub-frontend-lb"
+  load_balancer_type = "EXTERNAL"
+  region             = var.location  
+  create_proxy_only_subnet = false
+
+  backends = {
+    lb = {
+      is_default          = true
+      protocol            = "HTTP"
+      port_name           = "http"
+      health_check = {
+        request_path = "/"
+        port = 80
+      }      
+      manage_health_check = false
+      groups = [
+        { group = module.carshub_frontend_service_neg.id }
+      ]
     }
-  ]
-  depends_on = [module.carshub_frontend_service]
+  }
+  enable_ssl              = false
+  enable_http             = true
+  managed_ssl_certificate = false
+  enable_cloud_armor      = false
+  depends_on              = [module.carshub_frontend_service]
 }
 
 # Backend Load Balancer with HTTP
+# module "carshub_backend_service_lb" {
+#   source                   = "../../../modules/load-balancer"
+#   forwarding_port_range    = "80"
+#   forwarding_rule_name     = "carshub-backend-service-global-forwarding-rule-${var.environment}"
+#   forwarding_scheme        = "EXTERNAL"
+#   global_address_type      = "EXTERNAL"
+#   url_map_name             = "carshub-backend-service-compute-url-map-${var.environment}"
+#   global_address_name      = "carshub-backend-service-lb-global-address-${var.environment}"
+#   target_proxy_name        = "carshub-backend-service-target-proxy-${var.environment}"
+#   backend_service_name     = "carshub-backend-compute-${var.environment}"
+#   backend_service_protocol = "HTTP"
+#   backend_service_timeout  = 30
+#   # security_policy          = module.cloud_armor.policy.id
+#   ssl_certificates = [google_compute_managed_ssl_certificate.carshub_backend_ssl_cert.id]
+#   backends = [
+#     {
+#       backend = module.carshub_backend_service_neg.id
+#     }
+#   ]
+#   depends_on = [module.carshub_backend_service]
+# }
+
 module "carshub_backend_service_lb" {
-  source                   = "../../../modules/load-balancer"
-  forwarding_port_range    = "80"
-  forwarding_rule_name     = "carshub-backend-service-global-forwarding-rule-${var.environment}"
-  forwarding_scheme        = "EXTERNAL"
-  global_address_type      = "EXTERNAL"
-  url_map_name             = "carshub-backend-service-compute-url-map-${var.environment}"
-  global_address_name      = "carshub-backend-service-lb-global-address-${var.environment}"
-  target_proxy_name        = "carshub-backend-service-target-proxy-${var.environment}"
-  backend_service_name     = "carshub-backend-compute-${var.environment}"
-  backend_service_protocol = "HTTP"
-  backend_service_timeout  = 30
-  # security_policy          = module.cloud_armor.policy.id
-  ssl_certificates = [google_compute_managed_ssl_certificate.carshub_backend_ssl_cert.id]
-  backends = [
-    {
-      backend = module.carshub_backend_service_neg.id
+  source             = "../../../modules/lb"
+  project_id         = var.project_id
+  name               = "carshub-backend-lb"
+  load_balancer_type = "EXTERNAL"
+  region             = var.location  
+  create_proxy_only_subnet = false
+
+  backends = {
+    lb = {
+      is_default          = true
+      protocol            = "HTTP"
+      port_name           = "http"
+      health_check = {
+        request_path = "/"
+        port = 80
+      }      
+      manage_health_check = false
+      groups = [
+        { group = module.carshub_backend_service_neg.id }
+      ]
     }
-  ]
-  depends_on = [module.carshub_backend_service]
+  }
+
+  enable_ssl              = false
+  enable_http             = true
+  managed_ssl_certificate = false
+  enable_cloud_armor      = false
+  depends_on              = [module.carshub_backend_service]
 }
 
 # -----------------------------------------------------------------------------------------
@@ -735,7 +815,7 @@ module "carshub_cloudbuild_frontend_trigger" {
   substitutions = {
     _PROJECT_ID         = "${data.google_project.project.project_id}"
     _BACKEND_IP_ADDRESS = "${module.carshub_backend_service_lb.ip_address}"
-    _CDN_IP_ADDRESS     = "${module.carshub_cdn.cdn_ip_address}"
+    _CDN_IP_ADDRESS     = "${module.carshub_cdn.lb_ip_address}"
   }
   service_account = module.carshub_cloudbuild_service_account.id
 }

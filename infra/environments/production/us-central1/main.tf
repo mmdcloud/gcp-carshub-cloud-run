@@ -158,7 +158,7 @@ resource "null_resource" "build_and_push_frontend" {
     always_run = timestamp()
   }
   provisioner "local-exec" {
-    command = "bash ${path.cwd}/../../../../src/frontend/artifact_push.sh http://${module.carshub_backend_service_lb.ip_address} ${module.carshub_cdn.cdn_ip_address} ${data.google_project.project.project_id} ${var.environment}"
+    command = "bash ${path.cwd}/../../../../src/frontend/artifact_push.sh http://${module.carshub_backend_service_lb.ip_address} ${module.carshub_cdn.lb_ip_address} ${data.google_project.project.project_id} ${var.environment}"
   }
 
   depends_on = [
@@ -290,19 +290,38 @@ resource "google_storage_bucket_iam_binding" "storage_iam_binding" {
 # -----------------------------------------------------------------------------------------
 # CDN Configuration
 # -----------------------------------------------------------------------------------------
+# module "carshub_cdn" {
+#   source                = "../../../modules/cdn"
+#   bucket_name           = module.carshub_media_bucket.bucket_name
+#   enable_cdn            = true
+#   description           = "Content delivery network for media files"
+#   name                  = "carshub-media-cdn-${var.environment}"
+#   forwarding_port_range = "80"
+#   forwarding_rule_name  = "carshub-cdn-global-forwarding-rule-${var.environment}"
+#   forwarding_scheme     = "EXTERNAL"
+#   global_address_type   = "EXTERNAL"
+#   url_map_name          = "carshub-cdn-compute-url-map-${var.environment}"
+#   global_address_name   = "carshub-cdn-lb-global-address-${var.environment}"
+#   target_proxy_name     = "carshub-cdn-target-proxy-${var.environment}"
+# }
+
 module "carshub_cdn" {
-  source                = "../../../modules/cdn"
-  bucket_name           = module.carshub_media_bucket.bucket_name
-  enable_cdn            = true
-  description           = "Content delivery network for media files"
-  name                  = "carshub-media-cdn-${var.environment}"
-  forwarding_port_range = "80"
-  forwarding_rule_name  = "carshub-cdn-global-forwarding-rule-${var.environment}"
-  forwarding_scheme     = "EXTERNAL"
-  global_address_type   = "EXTERNAL"
-  url_map_name          = "carshub-cdn-compute-url-map-${var.environment}"
-  global_address_name   = "carshub-cdn-lb-global-address-${var.environment}"
-  target_proxy_name     = "carshub-cdn-target-proxy-${var.environment}"
+  source     = "../../../modules/lb"
+  project_id = var.project_id
+  name       = "carshub-media-cdn-${var.environment}"
+
+  backend_buckets = {
+    website = {
+      is_default  = true
+      bucket_name = module.carshub_media_bucket.bucket_name
+    }
+  }
+
+  enable_ssl              = false
+  enable_http             = true
+  managed_ssl_certificate = false
+  enable_cloud_armor      = false
+  depends_on              = [module.carshub_media_bucket]
 }
 
 # -----------------------------------------------------------------------------------------
@@ -689,7 +708,7 @@ module "carshub_cloudbuild_frontend_trigger" {
   substitutions = {
     _PROJECT_ID         = "${data.google_project.project.project_id}"
     _BACKEND_IP_ADDRESS = "${module.carshub_backend_service_lb.ip_address}"
-    _CDN_IP_ADDRESS     = "${module.carshub_cdn.cdn_ip_address}"
+    _CDN_IP_ADDRESS     = "${module.carshub_cdn.lb_ip_address}"
   }
   service_account = module.carshub_cloudbuild_service_account.id
 }
