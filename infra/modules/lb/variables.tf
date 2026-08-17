@@ -96,7 +96,7 @@ variable "backends" {
     path_patterns       = optional(list(string), [])
     health_check_id     = optional(string)
     manage_health_check = optional(bool, true)
-
+    is_serverless_neg = optional(bool, false)
     groups = list(object({
       group           = string
       balancing_mode  = optional(string, "UTILIZATION")

@@ -564,22 +564,19 @@ module "carshub_backend_service_neg" {
 # Load Balancer Configuration
 # -----------------------------------------------------------------------------------------
 module "carshub_frontend_service_lb" {
-  source             = "../../../modules/lb"
-  project_id         = var.project_id
-  name               = "carshub-frontend-lb-${var.environment}"
-  load_balancer_type = "EXTERNAL"
-  region             = var.location  
+  source                   = "../../../modules/lb"
+  project_id               = var.project_id
+  name                     = "carshub-frontend-lb-${var.environment}"
+  load_balancer_type       = "EXTERNAL"
+  region                   = var.location
   create_proxy_only_subnet = false
 
   backends = {
     lb = {
-      is_default          = true
-      protocol            = "HTTP"
-      port_name           = "http"
-      health_check = {
-        request_path = "/"
-        port = 80
-      }      
+      is_default = true
+      protocol   = "HTTP"
+      port_name  = "http"
+      is_serverless_neg   = true
       manage_health_check = false
       groups = [
         { group = module.carshub_frontend_service_neg.id }
@@ -594,11 +591,11 @@ module "carshub_frontend_service_lb" {
 }
 
 module "carshub_backend_service_lb" {
-  source             = "../../../modules/lb"
-  project_id         = var.project_id
-  name               = "carshub-backend-lb-${var.environment}"
-  load_balancer_type = "EXTERNAL"
-  region             = var.location  
+  source                   = "../../../modules/lb"
+  project_id               = var.project_id
+  name                     = "carshub-backend-lb-${var.environment}"
+  load_balancer_type       = "EXTERNAL"
+  region                   = var.location
   create_proxy_only_subnet = false
 
   backends = {
@@ -606,11 +603,8 @@ module "carshub_backend_service_lb" {
       is_default          = true
       protocol            = "HTTP"
       port_name           = "http"
-      health_check = {
-        request_path = "/"
-        port = 80
-      }      
-      manage_health_check = false
+      is_serverless_neg   = true
+      enable_health_check = false
       groups = [
         { group = module.carshub_backend_service_neg.id }
       ]

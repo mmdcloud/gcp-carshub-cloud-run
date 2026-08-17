@@ -4,17 +4,17 @@
 # }
 
 output "backend_lb_url" {
-  value       = "https://${module.carshub_backend_service_lb.ip_address}"
+  value       = "https://${module.carshub_backend_service_lb.lb_ip_address}"
   description = "Backend HTTPS URL"
 }
 
 output "frontend_lb_ip" {
-  value       = module.carshub_frontend_service_lb.ip_address
+  value       = module.carshub_frontend_service_lb.lb_ip_address
   description = "Frontend Load Balancer IP Address"
 }
 
 output "backend_lb_ip" {
-  value       = module.carshub_backend_service_lb.ip_address
+  value       = module.carshub_backend_service_lb.lb_ip_address
   description = "Backend Load Balancer IP Address"
 }
 
