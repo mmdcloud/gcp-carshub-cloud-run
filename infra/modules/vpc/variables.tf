@@ -5,12 +5,21 @@ variable "routing_mode" {}
 variable "region" {}
 variable "firewall_data" {
   type = list(object({
-    name          = string
-    source_ranges = set(string)
-    allow_list = set(object({
+    name                = string
+    description         = optional(string)
+    priority            = optional(number, 1000)
+    source_ranges       = optional(list(string))
+    source_tags         = optional(list(string))
+    destination_ranges  = optional(list(string))
+    target_tags         = optional(list(string))
+    allow_list = optional(list(object({
       protocol = string
-      ports    = list(string)
-    }))
+      ports    = optional(list(string))
+    })), [])
+    deny_list = optional(list(object({
+      protocol = string
+      ports    = optional(list(string))
+    })), [])
   }))
 }
 variable "subnets" {

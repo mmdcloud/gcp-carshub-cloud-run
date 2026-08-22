@@ -44,7 +44,49 @@ module "carshub_vpc" {
   routing_mode                    = "REGIONAL"
   region                          = var.location
   subnets                         = []
-  firewall_data                   = []
+  firewall_data = [
+    # {
+    #   # Cloud Run (frontend + backend) and the Cloud Function all reach Cloud
+    #   # SQL through the Serverless VPC Connector (10.8.0.0/28), never directly
+    #   # via an instance IP — this is the one rule that's actually load-bearing.
+    #   name               = "carshub-allow-connector-to-sql-${var.environment}"
+    #   description        = "Allow Serverless VPC Connector (Cloud Run + Cloud Function) to reach Cloud SQL private IP"
+    #   priority           = 1000
+    #   source_ranges      = ["10.8.0.0/28"]
+    #   destination_ranges = ["${module.carshub_db.db_ip_address}/32"]
+    #   allow_list = [
+    #     {
+    #       protocol = "tcp"
+    #       ports    = ["3306"]
+    #     }
+    #   ]
+    # },
+    # {
+    #   # Covers any future internal service-to-service calls made from the
+    #   # connector subnet (e.g. backend calling out to another internal API).
+    #   name          = "carshub-allow-connector-internal-${var.environment}"
+    #   description   = "Allow general internal traffic originating from the Serverless VPC Connector subnet"
+    #   priority      = 1000
+    #   source_ranges = ["10.8.0.0/28"]
+    #   allow_list = [
+    #     {
+    #       protocol = "tcp"
+    #       ports    = ["443", "8080"]
+    #     }
+    #   ]
+    # },
+    # {
+    #   name          = "carshub-deny-all-ingress-${var.environment}"
+    #   description   = "Explicit catch-all deny for any undocumented ingress traffic"
+    #   priority      = 65534
+    #   source_ranges = ["0.0.0.0/0"]
+    #   deny_list = [
+    #     {
+    #       protocol = "all"
+    #     }
+    #   ]
+    # }
+  ]
 }
 
 # -----------------------------------------------------------------------------------------
@@ -582,9 +624,9 @@ module "carshub_frontend_service_lb" {
 
   backends = {
     lb = {
-      is_default = true
-      protocol   = "HTTP"
-      port_name  = "http"
+      is_default          = true
+      protocol            = "HTTP"
+      port_name           = "http"
       is_serverless_neg   = true
       manage_health_check = false
       groups = [

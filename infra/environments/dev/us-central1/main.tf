@@ -44,7 +44,49 @@ module "carshub_vpc" {
   routing_mode                    = "REGIONAL"
   region                          = var.location
   subnets                         = []
-  firewall_data                   = []
+  firewall_data = [
+    {
+      # Cloud Run (frontend + backend) and the Cloud Function all reach Cloud
+      # SQL through the Serverless VPC Connector (10.8.0.0/28), never directly
+      # via an instance IP — this is the one rule that's actually load-bearing.
+      name               = "carshub-allow-connector-to-sql-${var.environment}"
+      description        = "Allow Serverless VPC Connector (Cloud Run + Cloud Function) to reach Cloud SQL private IP"
+      priority           = 1000
+      source_ranges      = ["10.8.0.0/28"]
+      destination_ranges = ["${module.carshub_db.db_ip_address}/32"]
+      allow_list = [
+        {
+          protocol = "tcp"
+          ports    = ["3306"]
+        }
+      ]
+    },
+    {
+      # Covers any future internal service-to-service calls made from the
+      # connector subnet (e.g. backend calling out to another internal API).
+      name          = "carshub-allow-connector-internal-${var.environment}"
+      description   = "Allow general internal traffic originating from the Serverless VPC Connector subnet"
+      priority      = 1000
+      source_ranges = ["10.8.0.0/28"]
+      allow_list = [
+        {
+          protocol = "tcp"
+          ports    = ["443", "8080"]
+        }
+      ]
+    },
+    {
+      name          = "carshub-deny-all-ingress-${var.environment}"
+      description   = "Explicit catch-all deny for any undocumented ingress traffic"
+      priority      = 65534
+      source_ranges = ["0.0.0.0/0"]
+      deny_list = [
+        {
+          protocol = "all"
+        }
+      ]
+    }
+  ]
 }
 
 # -----------------------------------------------------------------------------------------
@@ -78,7 +120,6 @@ module "carshub_function_app_service_account" {
     "roles/eventarc.eventReceiver",
     "roles/cloudsql.client",
     "roles/artifactregistry.reader",
-    # "roles/secretmanager.admin",
     "roles/secretmanager.secretAccessor",
     "roles/pubsub.publisher"
   ]
@@ -107,7 +148,6 @@ module "carshub_cloud_run_service_account" {
   member_prefix = "serviceAccount"
   permissions = [
     "roles/secretmanager.secretAccessor",
-    # "roles/storage.admin",
     "roles/storage.objectAdmin",
     "roles/iam.serviceAccountTokenCreator"
   ]
@@ -152,16 +192,19 @@ module "carshub_frontend_artifact_registry" {
   location      = var.location
   description   = "CarHub frontend repository"
   repository_id = "carshub-frontend-${var.environment}"
-  depends_on    = [module.carshub_backend_service, module.carshub_apis]
+  depends_on    = [module.carshub_apis]
 }
 
 resource "null_resource" "build_and_push_frontend" {
+  triggers = {
+    always_run = timestamp()
+  }
   provisioner "local-exec" {
-    command = "bash ${path.cwd}/../../../../src/frontend/artifact_push.sh http://${module.carshub_backend_service_lb.ip_address} ${module.carshub_cdn.lb_ip_address} ${data.google_project.project.project_id}"
+    command = "bash ${path.cwd}/../../../../src/frontend/artifact_push.sh http://${module.carshub_backend_service_lb.lb_ip_address} ${module.carshub_cdn.lb_ip_address} ${data.google_project.project.project_id} ${var.environment}"
   }
 
   depends_on = [
-    module.carshub_frontend_artifact_registry,
+    module.carshub_frontend_artifact_registry
   ]
 }
 
@@ -174,12 +217,15 @@ module "carshub_backend_artifact_registry" {
 }
 
 resource "null_resource" "build_and_push_backend" {
+  triggers = {
+    always_run = timestamp()
+  }
   provisioner "local-exec" {
-    command = "bash ${path.cwd}/../../../../src/backend/api/artifact_push.sh ${data.google_project.project.project_id}"
+    command = "bash ${path.cwd}/../../../../src/backend/api/artifact_push.sh ${data.google_project.project.project_id} ${var.environment}"
   }
 
   depends_on = [
-    module.carshub_backend_artifact_registry,
+    module.carshub_backend_artifact_registry
   ]
 }
 
@@ -192,7 +238,7 @@ module "carshub_media_bucket" {
   name     = "carshub-media-${var.environment}"
   cors = [
     {
-      origin          = ["http://${module.carshub_frontend_service_lb.ip_address}"]
+      origin          = ["*"]
       max_age_seconds = 3600
       method          = ["GET", "POST", "PUT", "DELETE"]
       response_header = ["*"]
@@ -426,10 +472,10 @@ module "carshub_frontend_service" {
       volume_mounts     = []
       cpu_idle          = true
       startup_cpu_boost = true
-      image             = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-frontend/carshub-frontend:latest"
+      image             = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-frontend-${var.environment}/carshub-frontend:latest"
     }
   ]
-  depends_on = [module.carshub_frontend_artifact_registry, module.carshub_apis, module.carshub_cloud_run_service_account]
+  depends_on = [null_resource.build_and_push_frontend, module.carshub_apis, module.carshub_cloud_run_service_account]
 }
 
 module "carshub_backend_service" {
@@ -457,7 +503,7 @@ module "carshub_backend_service" {
   ]
   containers = [
     {
-      image             = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-backend/carshub-backend:latest"
+      image             = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-backend-${var.environment}/carshub-backend:latest"
       cpu_idle          = true
       startup_cpu_boost = true
       volume_mounts = [
@@ -470,6 +516,11 @@ module "carshub_backend_service" {
         {
           name         = "DB_PATH"
           value        = "${module.carshub_db.db_ip_address}"
+          value_source = []
+        },
+        {
+          name         = "ENV"
+          value        = "${var.environment}"
           value_source = []
         },
         {
@@ -503,7 +554,7 @@ module "carshub_backend_service" {
       ]
     }
   ]
-  depends_on = [module.carshub_apis, module.carshub_sql_password_secret, module.carshub_backend_artifact_registry, module.carshub_cloud_run_service_account]
+  depends_on = [module.carshub_apis, module.carshub_sql_password_secret, null_resource.build_and_push_backend, module.carshub_cloud_run_service_account]
 }
 
 # -----------------------------------------------------------------------------------------
@@ -573,9 +624,9 @@ module "carshub_frontend_service_lb" {
 
   backends = {
     lb = {
-      is_default = true
-      protocol   = "HTTP"
-      port_name  = "http"
+      is_default          = true
+      protocol            = "HTTP"
+      port_name           = "http"
       is_serverless_neg   = true
       manage_health_check = false
       groups = [
@@ -632,7 +683,7 @@ module "carshub_cloudbuild_frontend_trigger" {
   filename     = "cloudbuild.yaml"
   substitutions = {
     _PROJECT_ID         = "${data.google_project.project.project_id}"
-    _BACKEND_IP_ADDRESS = "${module.carshub_backend_service_lb.ip_address}"
+    _BACKEND_IP_ADDRESS = "${module.carshub_backend_service_lb.lb_ip_address}"
     _CDN_IP_ADDRESS     = "${module.carshub_cdn.lb_ip_address}"
   }
   service_account = module.carshub_cloudbuild_service_account.id
@@ -666,7 +717,7 @@ module "frontend_uptime_check" {
   http_request_method = "GET"
   http_validate_ssl   = false
   resource_type       = "uptime_url"
-  resource_host       = module.carshub_frontend_service_lb.ip_address
+  resource_host       = module.carshub_frontend_service_lb.lb_ip_address
   checker_type        = "STATIC_IP_CHECKERS"
 }
 
@@ -680,7 +731,7 @@ module "backend_uptime_check" {
   http_request_method = "GET"
   http_validate_ssl   = false
   resource_type       = "uptime_url"
-  resource_host       = module.carshub_backend_service_lb.ip_address
+  resource_host       = module.carshub_backend_service_lb.lb_ip_address
   checker_type        = "STATIC_IP_CHECKERS"
 }
 
