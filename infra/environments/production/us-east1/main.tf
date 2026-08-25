@@ -62,8 +62,6 @@ module "carshub_vpc" {
       ]
     },
     {
-      # Covers any future internal service-to-service calls made from the
-      # connector subnet (e.g. backend calling out to another internal API).
       name          = "carshub-allow-connector-internal-${var.environment}"
       description   = "Allow general internal traffic originating from the Serverless VPC Connector subnet"
       priority      = 1000
@@ -72,17 +70,6 @@ module "carshub_vpc" {
         {
           protocol = "tcp"
           ports    = ["443", "8080"]
-        }
-      ]
-    },
-    {
-      name          = "carshub-deny-all-ingress-${var.environment}"
-      description   = "Explicit catch-all deny for any undocumented ingress traffic"
-      priority      = 65534
-      source_ranges = ["0.0.0.0/0"]
-      deny_list = [
-        {
-          protocol = "all"
         }
       ]
     }
@@ -151,23 +138,6 @@ module "carshub_cloud_run_service_account" {
     "roles/storage.objectAdmin",
     "roles/iam.serviceAccountTokenCreator"
   ]
-}
-
-# -----------------------------------------------------------------------------------------
-# SECURITY: SSL/TLS Configuration
-# -----------------------------------------------------------------------------------------
-resource "google_compute_managed_ssl_certificate" "carshub_frontend_ssl_cert" {
-  name = "carshub-frontend-ssl-cert-${var.environment}"
-  managed {
-    domains = ["carshub-frontend.${var.domain}"]
-  }
-}
-
-resource "google_compute_managed_ssl_certificate" "carshub_backend_ssl_cert" {
-  name = "carshub-backend-ssl-cert-${var.environment}"
-  managed {
-    domains = ["carshub-api.${var.domain}"]
-  }
 }
 
 # -----------------------------------------------------------------------------------------
@@ -385,7 +355,7 @@ module "carshub_db" {
   disk_autoresize             = true
   disk_autoresize_limit       = 500 # GB
   ipv4_enabled                = false
-  deletion_protection_enabled = false
+  deletion_protection_enabled = false # true for production
   backup_configuration = [
     {
       enabled                        = true
@@ -404,7 +374,7 @@ module "carshub_db" {
   database_flags = [
     {
       name  = "general_log"
-      value = "on"
+      value = "off"
     },
     {
       name  = "log_queries_not_using_indexes"
@@ -450,7 +420,7 @@ module "carshub_run_iam_permissions" {
 
 module "carshub_frontend_service" {
   source                           = "../../../modules/cloud-run"
-  deletion_protection              = false
+  deletion_protection              = false # true for production
   ingress                          = "INGRESS_TRAFFIC_ALL"
   vpc_connector_name               = module.carshub_vpc_connectors.vpc_connectors[0].id
   service_account                  = module.carshub_cloud_run_service_account.sa_email
