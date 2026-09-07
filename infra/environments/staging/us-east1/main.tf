@@ -561,35 +561,49 @@ module "carshub_backend_service" {
 # Cloud Function Configuration
 # -----------------------------------------------------------------------------------------
 module "carshub_media_update_function" {
-  source                       = "../../../modules/cloud-run-function"
-  function_name                = "carshub-media-function-${var.environment}"
-  function_description         = "A function to update media details in SQL database after the upload trigger"
-  handler                      = "handler"
-  runtime                      = "python312"
-  location                     = var.location
-  storage_source_bucket        = module.carshub_media_bucket_code.bucket_name
-  storage_source_bucket_object = module.carshub_media_bucket_code.object_name[0].name
-  build_env_variables = {
-    DB_USER     = module.carshub_db.db_user
-    DB_NAME     = module.carshub_db.db_name
-    SECRET_NAME = module.carshub_sql_password_secret.secret_name
-    DB_PATH     = module.carshub_db.db_ip_address
+  source               = "../../../modules/cloud-run-function"
+  function_name        = "carshub-media-function-${var.environment}"
+  function_description = "A function to update media details in SQL database after the upload trigger"
+  location             = var.location
+  project_id           = var.project_id
+
+  build_config = {
+    handler = "handler"
+    runtime = "python312"
+    storage_source = {
+      bucket = module.carshub_media_bucket_code.bucket_name
+      object = module.carshub_media_bucket_code.object_name[0].name
+    }
+    build_env_variables = {
+      DB_USER     = module.carshub_db.db_user
+      DB_NAME     = module.carshub_db.db_name
+      SECRET_NAME = module.carshub_sql_password_secret.secret_name
+      DB_PATH     = module.carshub_db.db_ip_address
+    }
   }
-  all_traffic_on_latest_revision      = true
-  vpc_connector                       = module.carshub_vpc_connectors.vpc_connectors[0].id
-  vpc_connector_egress_settings       = "ALL_TRAFFIC"
-  ingress_settings                    = "ALLOW_INTERNAL_ONLY"
-  function_app_service_account_email  = module.carshub_function_app_service_account.sa_email
-  max_instance_count                  = 10
-  min_instance_count                  = 2
-  available_memory                    = "256M"
-  timeout_seconds                     = 60
-  event_trigger_event_type            = "google.cloud.pubsub.topic.v1.messagePublished"
-  event_trigger_topic                 = module.carshub_media_bucket_pubsub.topic_id
-  event_trigger_retry_policy          = "RETRY_POLICY_RETRY"
-  event_trigger_service_account_email = module.carshub_function_app_service_account.sa_email
-  event_filters                       = []
-  depends_on                          = [module.carshub_function_app_service_account]
+
+  service_config = {
+    max_instance_count               = 10
+    min_instance_count               = 2
+    available_memory                 = "256M"
+    timeout_seconds                  = 60
+    max_instance_request_concurrency = 80
+    available_cpu                    = "4"
+    ingress_settings                 = "ALLOW_INTERNAL_ONLY"
+    all_traffic_on_latest_revision   = true
+    service_account_email            = module.carshub_function_app_service_account.sa_email
+    vpc_connector                    = module.carshub_vpc_connectors.vpc_connectors[0].id
+    vpc_connector_egress_settings    = "ALL_TRAFFIC"
+  }
+  event_trigger = {
+    service_account_email = module.carshub_function_app_service_account.sa_email
+    event_type            = "google.cloud.pubsub.topic.v1.messagePublished"
+    pubsub_topic          = module.carshub_media_bucket_pubsub.topic_id
+    retry_policy          = "RETRY_POLICY_RETRY"
+    event_filters         = []
+  }
+
+  depends_on = [module.carshub_function_app_service_account]
 }
 
 # -----------------------------------------------------------------------------------------

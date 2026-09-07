@@ -157,6 +157,7 @@ resource "google_compute_region_health_check" "this" {
       request_path = each.value.health_check.request_path
     }
   }
+
 }
 
 locals {
@@ -310,6 +311,15 @@ resource "google_compute_backend_service" "serverless" {
 
   enable_cdn = each.value.enable_cdn
 
+  dynamic "iap" {
+    for_each = length(each.value.iap_config) > 0 ? [1] : []
+    content {
+      enabled              = each.value.enabled
+      oauth2_client_id     = each.value.oauth2_client_id
+      oauth2_client_secret = each.value.oauth2_client_secret
+    }
+  }
+
   dynamic "cdn_policy" {
     for_each = each.value.enable_cdn ? [1] : []
     content {
@@ -325,10 +335,17 @@ resource "google_compute_backend_service" "serverless" {
   dynamic "backend" {
     for_each = each.value.groups
     content {
-      group           = backend.value.group
-      balancing_mode  = backend.value.balancing_mode
-      capacity_scaler = backend.value.capacity_scaler
-      max_utilization = backend.value.balancing_mode == "UTILIZATION" ? backend.value.max_utilization : null
+      group                        = backend.value.group
+      balancing_mode               = backend.value.balancing_mode
+      capacity_scaler              = backend.value.capacity_scaler
+      max_connections              = backend.value.max_connections
+      max_connections_per_endpoint = backend.value.max_connections_per_endpoint
+      max_connections_per_instance = backend.value.max_connections_per_instance
+      max_rate                     = backend.value.max_rate
+      max_rate_per_endpoint        = backend.value.max_rate_per_endpoint
+      max_rate_per_instance        = backend.value.max_rate_per_instance
+      preference                   = backend.value.preference
+      max_utilization              = backend.value.balancing_mode == "UTILIZATION" ? backend.value.max_utilization : null
     }
   }
 
@@ -354,10 +371,19 @@ resource "google_compute_backend_service" "this" {
   timeout_sec = each.value.timeout_sec
 
   load_balancing_scheme = "EXTERNAL_MANAGED"
-  health_checks          = [local.health_check_ids[each.key]]
+  health_checks         = [local.health_check_ids[each.key]]
   security_policy       = var.enable_cloud_armor ? google_compute_security_policy.this[0].id : null
 
   enable_cdn = each.value.enable_cdn
+
+  dynamic "iap" {
+    for_each = length(each.value.iap_config) > 0 ? [1] : []
+    content {
+      enabled              = each.value.enabled
+      oauth2_client_id     = each.value.oauth2_client_id
+      oauth2_client_secret = each.value.oauth2_client_secret
+    }
+  }
 
   dynamic "cdn_policy" {
     for_each = each.value.enable_cdn ? [1] : []
@@ -374,10 +400,17 @@ resource "google_compute_backend_service" "this" {
   dynamic "backend" {
     for_each = each.value.groups
     content {
-      group           = backend.value.group
-      balancing_mode  = backend.value.balancing_mode
-      capacity_scaler = backend.value.capacity_scaler
-      max_utilization = backend.value.balancing_mode == "UTILIZATION" ? backend.value.max_utilization : null
+      group                        = backend.value.group
+      balancing_mode               = backend.value.balancing_mode
+      capacity_scaler              = backend.value.capacity_scaler
+      max_connections              = backend.value.max_connections
+      max_connections_per_endpoint = backend.value.max_connections_per_endpoint
+      max_connections_per_instance = backend.value.max_connections_per_instance
+      max_rate                     = backend.value.max_rate
+      max_rate_per_endpoint        = backend.value.max_rate_per_endpoint
+      max_rate_per_instance        = backend.value.max_rate_per_instance
+      preference                   = backend.value.preference
+      max_utilization              = backend.value.balancing_mode == "UTILIZATION" ? backend.value.max_utilization : null
     }
   }
 
@@ -406,13 +439,28 @@ resource "google_compute_region_backend_service" "serverless" {
 
   load_balancing_scheme = "INTERNAL_MANAGED"
 
+  dynamic "iap" {
+    for_each = length(each.value.iap_config) > 0 ? [1] : []
+    content {
+      enabled              = each.value.enabled
+      oauth2_client_id     = each.value.oauth2_client_id
+      oauth2_client_secret = each.value.oauth2_client_secret
+    }
+  }
+
   dynamic "backend" {
     for_each = each.value.groups
     content {
-      group           = backend.value.group
-      balancing_mode  = backend.value.balancing_mode
-      capacity_scaler = backend.value.capacity_scaler
-      max_utilization = backend.value.balancing_mode == "UTILIZATION" ? backend.value.max_utilization : null
+      group                        = backend.value.group
+      balancing_mode               = backend.value.balancing_mode
+      capacity_scaler              = backend.value.capacity_scaler
+      max_connections              = backend.value.max_connections
+      max_connections_per_endpoint = backend.value.max_connections_per_endpoint
+      max_connections_per_instance = backend.value.max_connections_per_instance
+      max_rate                     = backend.value.max_rate
+      max_rate_per_endpoint        = backend.value.max_rate_per_endpoint
+      max_rate_per_instance        = backend.value.max_rate_per_instance
+      max_utilization              = backend.value.balancing_mode == "UTILIZATION" ? backend.value.max_utilization : null
     }
   }
 
@@ -439,13 +487,28 @@ resource "google_compute_region_backend_service" "this" {
   load_balancing_scheme = "INTERNAL_MANAGED"
   health_checks         = each.value.is_serverless_neg ? [] : [local.health_check_ids[each.key]]
 
+  dynamic "iap" {
+    for_each = length(each.value.iap_config) > 0 ? [1] : []
+    content {
+      enabled              = each.value.enabled
+      oauth2_client_id     = each.value.oauth2_client_id
+      oauth2_client_secret = each.value.oauth2_client_secret
+    }
+  }
+
   dynamic "backend" {
     for_each = each.value.groups
     content {
-      group           = backend.value.group
-      balancing_mode  = backend.value.balancing_mode
-      capacity_scaler = backend.value.capacity_scaler
-      max_utilization = backend.value.balancing_mode == "UTILIZATION" ? backend.value.max_utilization : null
+      group                        = backend.value.group
+      balancing_mode               = backend.value.balancing_mode
+      capacity_scaler              = backend.value.capacity_scaler
+      max_connections              = backend.value.max_connections
+      max_connections_per_endpoint = backend.value.max_connections_per_endpoint
+      max_connections_per_instance = backend.value.max_connections_per_instance
+      max_rate                     = backend.value.max_rate
+      max_rate_per_endpoint        = backend.value.max_rate_per_endpoint
+      max_rate_per_instance        = backend.value.max_rate_per_instance
+      max_utilization              = backend.value.balancing_mode == "UTILIZATION" ? backend.value.max_utilization : null
     }
   }
 

@@ -33,6 +33,16 @@ output "security_policy_id" {
   value       = var.enable_cloud_armor ? google_compute_security_policy.this[0].id : null
 }
 
+output "http_forwarding_rule_id" {
+  description = "ID of the Cloud Armor security policy, if enabled."
+  value       = try(google_compute_forwarding_rule.http[0].id, null)
+}
+
+output "global_http_forwarding_rule_id" {
+  description = "ID of the Cloud Armor security policy, if enabled."
+  value       = try(google_compute_global_forwarding_rule.http[0].id, null)
+}
+
 # output "https_forwarding_rule_id" {
 #   description = "ID of the HTTPS (443) global forwarding rule."
 #   value       = google_compute_global_forwarding_rule.https.id

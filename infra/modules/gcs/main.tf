@@ -5,6 +5,7 @@ resource "google_storage_bucket" "bucket" {
   versioning {
     enabled = var.versioning
   }
+  public_access_prevention    = var.public_access_prevention
   uniform_bucket_level_access = var.uniform_bucket_level_access
   dynamic "cors" {
     for_each = var.cors

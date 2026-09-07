@@ -96,12 +96,26 @@ variable "backends" {
     path_patterns       = optional(list(string), [])
     health_check_id     = optional(string)
     manage_health_check = optional(bool, true)
-    is_serverless_neg = optional(bool, false)
+    is_serverless_neg   = optional(bool, false)
+
+    iap_config = optional(list(object({
+      enabled              = bool
+      oauth2_client_id     = string
+      oauth2_client_secret = string
+    })), [])
+
     groups = list(object({
-      group           = string
-      balancing_mode  = optional(string, "UTILIZATION")
-      capacity_scaler = optional(number, 1.0)
-      max_utilization = optional(number, 0.8)
+      group                        = string
+      balancing_mode               = optional(string, "UTILIZATION")
+      capacity_scaler              = optional(number, 0)
+      max_connections              = optional(number, 0)
+      max_connections_per_endpoint = optional(number, 0)
+      max_connections_per_instance = optional(number, 0)
+      max_rate                     = optional(number, 0)
+      max_rate_per_endpoint        = optional(number, 0)
+      max_rate_per_instance        = optional(number, 0)
+      preference                   = optional(string, "DEFAULT")
+      max_utilization              = optional(number, 0)
     }))
 
     health_check = optional(object({

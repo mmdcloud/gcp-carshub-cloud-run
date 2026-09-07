@@ -7,6 +7,10 @@ variable "contents" {
 }
 variable "location" {}
 variable "name" {}
+variable "public_access_prevention" {
+  type = bool
+  default = true
+}
 variable "versioning" {
   default = false
 }
