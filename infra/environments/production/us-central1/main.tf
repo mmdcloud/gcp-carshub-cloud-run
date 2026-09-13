@@ -147,8 +147,8 @@ resource "google_pubsub_topic_iam_binding" "binding" {
 }
 
 module "carshub_media_bucket_pubsub" {
-  source = "../../../modules/pubsub"
-  topic  = "carshub-media-bucket-events-${var.environment}"
+  source     = "../../../modules/pubsub"
+  topic_name = "carshub-media-bucket-events-${var.environment}"
 }
 
 # -----------------------------------------------------------------------------------------
@@ -156,6 +156,8 @@ module "carshub_media_bucket_pubsub" {
 # -----------------------------------------------------------------------------------------
 module "carshub_frontend_artifact_registry" {
   source        = "../../../modules/artifact-registry"
+  project_id    = var.project_id
+  artifact_type = "DOCKER"
   location      = var.location
   description   = "CarHub frontend repository"
   repository_id = "carshub-frontend-${var.environment}"
@@ -177,6 +179,8 @@ resource "null_resource" "build_and_push_frontend" {
 
 module "carshub_backend_artifact_registry" {
   source        = "../../../modules/artifact-registry"
+  project_id    = var.project_id
+  artifact_type = "DOCKER"
   location      = var.location
   description   = "CarHub backend repository"
   repository_id = "carshub-backend-${var.environment}"
@@ -421,9 +425,10 @@ module "carshub_run_iam_permissions" {
 
 module "carshub_frontend_service" {
   source                           = "../../../modules/cloud-run"
+  project_id                       = var.project_id
+  type                             = "SERVICE"
   deletion_protection              = false # true for production
   ingress                          = "INGRESS_TRAFFIC_ALL"
-  vpc_connector_name               = module.carshub_vpc_connectors.vpc_connectors[0].id
   service_account                  = module.carshub_cloud_run_service_account.sa_email
   location                         = var.location
   min_instance_count               = 2
@@ -431,12 +436,19 @@ module "carshub_frontend_service" {
   max_instance_request_concurrency = 80
   name                             = "carshub-frontend-service-${var.environment}"
   volumes                          = []
+
+  vpc_access = {
+    vpc_connector_name = module.carshub_vpc_connectors.vpc_connectors[0].id
+    egress             = "ALL_TRAFFIC"
+  }
+
   traffic = [
     {
       traffic_type         = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
       traffic_type_percent = 100
     }
   ]
+
   containers = [
     {
       env               = []
@@ -451,27 +463,38 @@ module "carshub_frontend_service" {
 
 module "carshub_backend_service" {
   source                           = "../../../modules/cloud-run"
+  project_id                       = var.project_id
+  type                             = "SERVICE"
+  name                             = "carshub-backend-service-${var.environment}"
   deletion_protection              = false
-  vpc_connector_name               = module.carshub_vpc_connectors.vpc_connectors[0].id
   ingress                          = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
   service_account                  = module.carshub_cloud_run_service_account.sa_email
   location                         = var.location
   min_instance_count               = 2
   max_instance_count               = 5
   max_instance_request_concurrency = 80
+
+  vpc_access = {
+    vpc_connector_name = module.carshub_vpc_connectors.vpc_connectors[0].id
+    egress             = "ALL_TRAFFIC"
+  }
+
   volumes = [
     {
-      name               = "cloudsql"
-      cloud_sql_instance = [module.carshub_db.db_connection_name]
+      name = "cloudsql"
+      cloud_sql_instance = {
+        instances = [module.carshub_db.db_connection_name]
+      }
     }
   ]
-  name = "carshub-backend-service-${var.environment}"
+
   traffic = [
     {
       traffic_type         = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
       traffic_type_percent = 100
     }
   ]
+
   containers = [
     {
       image             = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-backend-${var.environment}/carshub-backend:latest"

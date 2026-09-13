@@ -7,6 +7,7 @@ resource "google_storage_bucket" "bucket" {
   }
   public_access_prevention    = var.public_access_prevention
   uniform_bucket_level_access = var.uniform_bucket_level_access
+
   dynamic "cors" {
     for_each = var.cors
     content {
@@ -16,6 +17,7 @@ resource "google_storage_bucket" "bucket" {
       response_header = cors.value["response_header"]
     }
   }
+
   dynamic "lifecycle_rule" {
     for_each = var.lifecycle_rules
     content {
