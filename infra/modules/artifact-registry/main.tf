@@ -183,8 +183,8 @@ resource "google_artifact_registry_repository" "repo" {
 }
 
 resource "google_artifact_registry_project_config" "this" {
-  count = var.enable_project_config ? 1 : 0
-
+  count    = var.enable_project_config ? 1 : 0
+  provider = google-beta
   project  = var.project_id
   location = var.location
 
@@ -195,16 +195,16 @@ resource "google_artifact_registry_project_config" "this" {
 }
 
 resource "google_artifact_registry_vpcsc_config" "this" {
-  count = var.enable_vpcsc_config ? 1 : 0
-
+  count        = var.enable_vpcsc_config ? 1 : 0
+  provider     = google-beta
   project      = var.project_id
   location     = var.location
   vpcsc_policy = var.vpcsc_policy
 }
 
 resource "google_artifact_registry_rule" "this" {
-  for_each = { for r in var.rules : r.rule_id => r }
-
+  for_each      = { for r in var.rules : r.rule_id => r }
+  provider      = google-beta
   project       = var.project_id
   location      = google_artifact_registry_repository.repo.location
   repository_id = google_artifact_registry_repository.repo.repository_id

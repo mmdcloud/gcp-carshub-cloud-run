@@ -42,7 +42,6 @@ module "carshub_vpc" {
   delete_default_routes_on_create = false
   auto_create_subnetworks         = false
   routing_mode                    = "REGIONAL"
-  region                          = var.location
   subnets                         = []
   firewall_data = [
     {
@@ -418,8 +417,8 @@ module "carshub_db" {
 module "carshub_run_iam_permissions" {
   source = "../../../modules/cloud-run-iam"
   members = [
-    module.carshub_backend_service.name,
-    module.carshub_frontend_service.name
+    module.carshub_backend_service.service_name,
+    module.carshub_frontend_service.service_name
   ]
 }
 
@@ -608,7 +607,7 @@ module "carshub_frontend_service_neg" {
   neg_name     = "carshub-frontend-service-neg-${var.environment}"
   neg_type     = "SERVERLESS"
   location     = var.location
-  service_name = module.carshub_frontend_service.name
+  service_name = module.carshub_frontend_service.service_name
 }
 
 module "carshub_backend_service_neg" {
@@ -616,7 +615,7 @@ module "carshub_backend_service_neg" {
   neg_name     = "carshub-backend-service-neg-${var.environment}"
   neg_type     = "SERVERLESS"
   location     = var.location
-  service_name = module.carshub_backend_service.name
+  service_name = module.carshub_backend_service.service_name
 }
 
 # -----------------------------------------------------------------------------------------

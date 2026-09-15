@@ -7,7 +7,6 @@ resource "google_compute_network" "vpc" {
   bgp_always_compare_med                    = var.bgp_always_compare_med
   bgp_best_path_selection_mode              = var.bgp_best_path_selection_mode
   bgp_inter_region_cost                     = var.bgp_inter_region_cost
-  delete_bgp_always_compare_med             = var.delete_bgp_always_compare_med
   enable_ula_internal_ipv6                  = var.enable_ula_internal_ipv6
   internal_ipv6_range                       = var.internal_ipv6_range
   network_profile                           = var.network_profile
@@ -25,16 +24,13 @@ resource "google_compute_subnetwork" "subnets" {
   private_ip_google_access         = var.subnets[count.index].private_ip_google_access
   purpose                          = var.subnets[count.index].purpose
   role                             = var.subnets[count.index].role
-  allow_subnet_cidr_routes_overlap = var.subnets[count.index].allow_subnet_cidr_routes_overlap
   external_ipv6_prefix             = var.subnets[count.index].external_ipv6_prefix
-  internal_ipv6_prefix             = var.subnets[count.index].internal_ipv6_prefix
   ip_collection                    = var.subnets[count.index].ip_collection
   ipv6_access_type                 = var.subnets[count.index].ipv6_access_type
   private_ipv6_google_access       = var.subnets[count.index].private_ipv6_google_access
   stack_type                       = var.subnets[count.index].stack_type
   send_secondary_ip_range_if_empty = var.subnets[count.index].send_secondary_ip_range_if_empty
   reserved_internal_range          = var.subnets[count.index].reserved_internal_range
-  resolve_subnet_mask              = var.subnets[count.index].resolve_subnet_mask
 
   dynamic "log_config" {
     for_each = var.subnets[count.index].log_config != null ? [var.subnets[count.index].log_config] : []

@@ -11,7 +11,7 @@
 resource "google_service_account" "cloud_run_sa" {
   count        = var.create_service_account ? 1 : 0
   project      = var.project_id
-  account_id   = var.service_account_id != null ? var.service_account_id : "${var.name}-run-sa"
+  account_id   = var.service_account_id != null ? var.service_account_id : "${var.name}"
   display_name = "Runtime SA for Cloud Run ${var.type} ${var.name}"
 }
 
