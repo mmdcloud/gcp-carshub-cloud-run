@@ -203,9 +203,10 @@ resource "null_resource" "build_and_push_backend" {
 # Google Cloud Storage (GCS) Configuration
 # -----------------------------------------------------------------------------------------
 module "carshub_media_bucket" {
-  source   = "../../../modules/gcs"
-  location = var.location
-  name     = "carshub-media-${var.environment}"
+  source     = "../../../modules/gcs"
+  project_id = var.project_id
+  location   = var.location
+  name       = "carshub-media-${var.environment}"
   cors = [
     {
       origin          = ["*"]
@@ -260,10 +261,11 @@ module "carshub_media_bucket" {
 }
 
 module "carshub_media_bucket_code" {
-  source   = "../../../modules/gcs"
-  location = var.location
-  name     = "carshub-media-code-${var.environment}"
-  cors     = []
+  source     = "../../../modules/gcs"
+  project_id = var.project_id
+  location   = var.location
+  name       = "carshub-media-code-${var.environment}"
+  cors       = []
   contents = [
     {
       name        = "carshub_media_function_code.zip"
@@ -603,19 +605,25 @@ module "carshub_media_update_function" {
 # Network endpoint groups Configuration
 # -----------------------------------------------------------------------------------------
 module "carshub_frontend_service_neg" {
-  source       = "../../../modules/network_endpoint_groups"
-  neg_name     = "carshub-frontend-service-neg-${var.environment}"
-  neg_type     = "SERVERLESS"
-  location     = var.location
-  service_name = module.carshub_frontend_service.service_name
+  source   = "../../../modules/network_endpoint_groups"
+  type     = "REGIONAL"
+  neg_name = "carshub-frontend-service-neg-${var.environment}"
+  neg_type = "SERVERLESS"
+  location = var.location
+  cloud_run = {
+    service = module.carshub_frontend_service.service_name
+  }
 }
 
 module "carshub_backend_service_neg" {
-  source       = "../../../modules/network_endpoint_groups"
-  neg_name     = "carshub-backend-service-neg-${var.environment}"
-  neg_type     = "SERVERLESS"
-  location     = var.location
-  service_name = module.carshub_backend_service.service_name
+  source   = "../../../modules/network_endpoint_groups"
+  type     = "REGIONAL"
+  neg_name = "carshub-backend-service-neg-${var.environment}"
+  neg_type = "SERVERLESS"
+  location = var.location
+  cloud_run = {
+    service = module.carshub_backend_service.service_name
+  }
 }
 
 # -----------------------------------------------------------------------------------------
