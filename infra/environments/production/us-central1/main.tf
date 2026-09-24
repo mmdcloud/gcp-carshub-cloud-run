@@ -5,6 +5,10 @@ data "vault_generic_secret" "sql" {
   path = "secret/sql"
 }
 
+data "google_dns_managed_zone" "zone" {
+  name = "mohitd"
+}
+
 # -----------------------------------------------------------------------------------------
 # Getting project information
 # -----------------------------------------------------------------------------------------
@@ -250,7 +254,8 @@ module "carshub_media_bucket" {
   ]
   notifications = [
     {
-      topic_id = module.carshub_media_bucket_pubsub.topic_id
+      payload_format = "JSON_API_V1"
+      topic_id       = module.carshub_media_bucket_pubsub.topic_id
     }
   ]
   force_destroy               = true
@@ -331,17 +336,21 @@ module "carshub_cdn" {
 # Secret Manager Configuration
 # -----------------------------------------------------------------------------------------
 module "carshub_sql_password_secret" {
-  source      = "../../../modules/secret-manager"
-  secret_data = tostring(data.vault_generic_secret.sql.data["password"])
-  secret_id   = "carshub-db-password-secret-${var.environment}"
-  depends_on  = [module.carshub_apis]
+  source              = "../../../modules/secret-manager"
+  is_regional         = false
+  deletion_protection = false
+  secret_data         = tostring(data.vault_generic_secret.sql.data["password"])
+  secret_id           = "carshub-db-password-secret-${var.environment}"
+  depends_on          = [module.carshub_apis]
 }
 
 module "carshub_sql_username_secret" {
-  source      = "../../../modules/secret-manager"
-  secret_data = tostring(data.vault_generic_secret.sql.data["username"])
-  secret_id   = "carshub-db-username-secret-${var.environment}"
-  depends_on  = [module.carshub_apis]
+  source              = "../../../modules/secret-manager"
+  is_regional         = false
+  deletion_protection = false
+  secret_data         = tostring(data.vault_generic_secret.sql.data["username"])
+  secret_id           = "carshub-db-username-secret-${var.environment}"
+  depends_on          = [module.carshub_apis]
 }
 
 # -----------------------------------------------------------------------------------------
@@ -452,6 +461,12 @@ module "carshub_frontend_service" {
 
   containers = [
     {
+      ports = [
+        {
+          container_port = 3000
+          name           = "http1"
+        }
+      ]
       env               = []
       volume_mounts     = []
       cpu_idle          = true
@@ -505,6 +520,12 @@ module "carshub_backend_service" {
         {
           name       = "cloudsql"
           mount_path = "/cloudsql"
+        }
+      ]
+      ports = [
+        {
+          container_port = 3000
+          name           = "http1"
         }
       ]
       env = [
@@ -567,12 +588,12 @@ module "carshub_media_update_function" {
     runtime = "python312"
     storage_source = {
       bucket = module.carshub_media_bucket_code.bucket_name
-      object = module.carshub_media_bucket_code.object_name[0].name
+      object = module.carshub_media_bucket_code.bucket_objects["carshub_media_function_code.zip"].name
     }
-    build_env_variables = {
+    build_environment_variables = {
       DB_USER     = module.carshub_db.db_user
       DB_NAME     = module.carshub_db.db_name
-      SECRET_NAME = module.carshub_sql_password_secret.secret_name
+      SECRET_NAME = module.carshub_sql_password_secret.name
       DB_PATH     = module.carshub_db.db_ip_address
     }
   }
@@ -583,13 +604,14 @@ module "carshub_media_update_function" {
     available_memory                 = "256M"
     timeout_seconds                  = 60
     max_instance_request_concurrency = 80
-    available_cpu                    = "4"
+    available_cpu                    = "1" # <-- Changed from "4" to "1"
     ingress_settings                 = "ALLOW_INTERNAL_ONLY"
     all_traffic_on_latest_revision   = true
     service_account_email            = module.carshub_function_app_service_account.sa_email
     vpc_connector                    = module.carshub_vpc_connectors.vpc_connectors[0].id
     vpc_connector_egress_settings    = "ALL_TRAFFIC"
   }
+
   event_trigger = {
     service_account_email = module.carshub_function_app_service_account.sa_email
     event_type            = "google.cloud.pubsub.topic.v1.messagePublished"
@@ -682,6 +704,29 @@ module "carshub_backend_service_lb" {
   managed_ssl_certificate = false
   enable_cloud_armor      = false
   depends_on              = [module.carshub_backend_service]
+}
+
+# --------------------------------------------------------------------------
+# DNS Configuration
+# --------------------------------------------------------------------------
+resource "google_dns_record_set" "carshub_frontend_dns_record" {
+  name = "frontend-${var.environment}.${data.google_dns_managed_zone.zone.dns_name}"
+  type = "A"
+  ttl  = 300
+
+  managed_zone = data.google_dns_managed_zone.zone.name
+
+  rrdatas = [module.carshub_frontend_service_lb.lb_ip_address]
+}
+
+resource "google_dns_record_set" "carshub_backend_dns_record" {
+  name = "backend-${var.environment}.${data.google_dns_managed_zone.zone.dns_name}"
+  type = "A"
+  ttl  = 300
+
+  managed_zone = data.google_dns_managed_zone.zone.name
+
+  rrdatas = [module.carshub_backend_service_lb.lb_ip_address]
 }
 
 # -----------------------------------------------------------------------------------------

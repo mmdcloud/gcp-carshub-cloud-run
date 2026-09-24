@@ -33,7 +33,7 @@ resource "google_compute_subnetwork" "subnets" {
   reserved_internal_range          = var.subnets[count.index].reserved_internal_range
 
   dynamic "log_config" {
-    for_each = var.subnets[count.index].log_config != null ? [var.subnets[count.index].log_config] : []
+    for_each = try(var.subnets[count.index].log_config != null ? [var.subnets[count.index].log_config] : [], [])
     content {
       aggregation_interval = log_config.value.aggregation_interval
       filter_expr          = log_config.value.filter_expr
@@ -79,13 +79,13 @@ resource "google_compute_firewall" "firewall" {
   dynamic "deny" {
     for_each = var.firewall_data[count.index].deny_list
     content {
-      protocol = allow.value["protocol"]
-      ports    = allow.value["ports"]
+      protocol = deny.value["protocol"]
+      ports    = deny.value["ports"]
     }
   }
 
   dynamic "log_config" {
-    for_each = var.subnets[count.index].log_config != null ? [var.subnets[count.index].log_config] : []
+    for_each = var.firewall_data[count.index].log_config != null ? [var.firewall_data[count.index].log_config] : []
     content {
       metadata = log_config.value.metadata
     }

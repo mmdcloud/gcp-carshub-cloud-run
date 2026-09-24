@@ -8,6 +8,7 @@ resource "google_cloudfunctions2_function" "function" {
   location    = var.location
   description = var.function_description
   labels      = var.labels
+  
 
   kms_key_name = var.kms_key_name
 

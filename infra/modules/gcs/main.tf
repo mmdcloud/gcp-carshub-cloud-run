@@ -1,8 +1,4 @@
 locals {
-  # Single-bucket module: wrap the bucket name in a one-element set so the
-  # IAM `for_each` blocks below have a stable, unique key to iterate over.
-  # (Kept as a set/map pattern rather than a bare bool so this can be
-  # extended to multiple bucket names later without reshaping the IAM blocks.)
   names_set = toset([var.name])
 }
 
@@ -19,8 +15,6 @@ resource "google_storage_bucket" "bucket" {
   public_access_prevention     = var.public_access_prevention
 
   dynamic "custom_placement_config" {
-    # FIX: was `each.value` (undefined here); this resource has no for_each,
-    # so key the lookup off var.name directly.
     for_each = lookup(var.custom_placement_config, var.name, null) != null ? [var.custom_placement_config[var.name]] : []
     content {
       data_locations = lookup(custom_placement_config.value, "data_locations", null)
@@ -28,7 +22,6 @@ resource "google_storage_bucket" "bucket" {
   }
 
   dynamic "soft_delete_policy" {
-    # FIX: same `each.value` issue.
     for_each = [lookup(var.soft_delete_policy, var.name, {
       retention_duration_seconds = null
     })]
@@ -100,8 +93,6 @@ resource "google_storage_bucket" "bucket" {
   }
 
   dynamic "encryption" {
-    # FIX: was `each.value` (undefined here); key off var.name directly.
-    # If an encryption key name is set for this bucket name -> create a single encryption block.
     for_each = trimspace(lookup(var.encryption_key_names, lower(var.name), "")) != "" ? [true] : []
     content {
       default_kms_key_name = trimspace(
@@ -131,8 +122,6 @@ resource "google_storage_bucket" "bucket" {
     content {
 
       condition {
-        # FIX: these were missing `.value.condition.` and referenced the
-        # dynamic block itself instead of its current element.
         age                                      = lifecycle_rule.value.condition.age
         created_before                            = lifecycle_rule.value.condition.created_before
         custom_time_before                        = lifecycle_rule.value.condition.custom_time_before
@@ -188,9 +177,6 @@ resource "time_sleep" "destroy_wait_50_seconds" {
 }
 
 resource "google_storage_anywhere_cache" "cache" {
-  # FIX: var.enable_storage_anywhere_cache is an object (it's accessed as
-  # .zone/.ttl/.ingest_on_write below), so `== true` never matches. Gate on
-  # non-null instead.
   count           = var.enable_storage_anywhere_cache != null ? 1 : 0
   bucket          = google_storage_bucket.bucket.name
   zone            = var.enable_storage_anywhere_cache.zone
@@ -212,11 +198,6 @@ resource "google_storage_hmac_key" "hmac_keys" {
 # --------------------------------------------------------------------------------------------
 # Bucket IAM
 # --------------------------------------------------------------------------------------------
-# FIX: `google_storage_bucket.buckets[each.value]` -> `google_storage_bucket.bucket`.
-# This module only creates a single bucket (`google_storage_bucket.bucket`,
-# no for_each), so there is no `buckets` map/resource to index into.
-# `local.names_set` (defined in locals.tf) still drives the for_each here so
-# the IAM member-merging logic (admins + bucket_admins lookup) is unchanged.
 resource "google_storage_bucket_iam_binding" "admins" {
   for_each = var.set_admin_roles ? local.names_set : []
   bucket   = google_storage_bucket.bucket.name
@@ -295,10 +276,6 @@ resource "google_storage_bucket_iam_binding" "storage_admins" {
 # --------------------------------------------------------------------------------------------
 # HNS folders
 # --------------------------------------------------------------------------------------------
-# FIX: `for_each` was set to a *list* (var.hns_folders) while the block body
-# used `count.index`, which doesn't exist under for_each. Convert the list to
-# a map keyed by folder name so each.value is the folder object.
-# Only create root-level folders.
 resource "google_storage_folder" "folders" {
   for_each      = { for f in var.hns_folders : f.name => f }
   bucket        = google_storage_bucket.bucket.name
@@ -309,8 +286,6 @@ resource "google_storage_folder" "folders" {
 # --------------------------------------------------------------------------------------------
 # Managed folders
 # --------------------------------------------------------------------------------------------
-# FIX: same list-vs-for_each/count.index issue as above.
-# Only create root-level folders.
 resource "google_storage_managed_folder" "managed_folders" {
   for_each      = { for f in var.managed_folders : f.name => f }
   bucket        = google_storage_bucket.bucket.name

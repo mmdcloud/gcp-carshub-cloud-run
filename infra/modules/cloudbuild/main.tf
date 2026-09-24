@@ -1,12 +1,12 @@
 resource "google_cloudbuild_trigger" "cloudbuild_trigger" {
-  name = var.trigger_name
+  name     = var.trigger_name
   location = var.location
   trigger_template {
     branch_name = var.source_ref
-    repo_name = var.repo_name    
+    repo_name   = var.repo_name
   }
   substitutions = var.substitutions
-  filename = var.filename
+  filename      = var.filename
   # source_to_build {
   #   uri       = var.source_uri
   #   ref       = var.source_ref
@@ -20,7 +20,7 @@ resource "google_cloudbuild_trigger" "cloudbuild_trigger" {
   # }
   service_account = var.service_account
   approval_config {
-     approval_required = true 
+    approval_required = true
   }
   #   substitutions = {
   #     _FOO = "bar"

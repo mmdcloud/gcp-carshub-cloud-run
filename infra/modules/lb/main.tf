@@ -336,16 +336,18 @@ resource "google_compute_backend_service" "serverless" {
     for_each = each.value.groups
     content {
       group                        = backend.value.group
-      balancing_mode               = backend.value.balancing_mode
       capacity_scaler              = backend.value.capacity_scaler
-      max_connections              = backend.value.max_connections
-      max_connections_per_endpoint = backend.value.max_connections_per_endpoint
-      max_connections_per_instance = backend.value.max_connections_per_instance
-      max_rate                     = backend.value.max_rate
-      max_rate_per_endpoint        = backend.value.max_rate_per_endpoint
-      max_rate_per_instance        = backend.value.max_rate_per_instance
-      preference                   = backend.value.preference
-      max_utilization              = backend.value.balancing_mode == "UTILIZATION" ? backend.value.max_utilization : null
+      # Below configurations are not needed for serverless NEG
+
+      # balancing_mode               = backend.value.balancing_mode
+      # max_connections              = backend.value.max_connections
+      # max_connections_per_endpoint = backend.value.max_connections_per_endpoint
+      # max_connections_per_instance = backend.value.max_connections_per_instance
+      # max_rate                     = backend.value.max_rate
+      # max_rate_per_endpoint        = backend.value.max_rate_per_endpoint
+      # max_rate_per_instance        = backend.value.max_rate_per_instance
+      # preference                   = backend.value.preference
+      # max_utilization              = backend.value.balancing_mode == "UTILIZATION" ? backend.value.max_utilization : null
     }
   }
 
@@ -452,15 +454,17 @@ resource "google_compute_region_backend_service" "serverless" {
     for_each = each.value.groups
     content {
       group                        = backend.value.group
-      balancing_mode               = backend.value.balancing_mode
       capacity_scaler              = backend.value.capacity_scaler
-      max_connections              = backend.value.max_connections
-      max_connections_per_endpoint = backend.value.max_connections_per_endpoint
-      max_connections_per_instance = backend.value.max_connections_per_instance
-      max_rate                     = backend.value.max_rate
-      max_rate_per_endpoint        = backend.value.max_rate_per_endpoint
-      max_rate_per_instance        = backend.value.max_rate_per_instance
-      max_utilization              = backend.value.balancing_mode == "UTILIZATION" ? backend.value.max_utilization : null
+      # Below configurations are not needed for serverless NEG
+      
+      # balancing_mode               = backend.value.balancing_mode
+      # max_connections              = backend.value.max_connections
+      # max_connections_per_endpoint = backend.value.max_connections_per_endpoint
+      # max_connections_per_instance = backend.value.max_connections_per_instance
+      # max_rate                     = backend.value.max_rate
+      # max_rate_per_endpoint        = backend.value.max_rate_per_endpoint
+      # max_rate_per_instance        = backend.value.max_rate_per_instance
+      # max_utilization              = backend.value.balancing_mode == "UTILIZATION" ? backend.value.max_utilization : null
     }
   }
 

@@ -46,6 +46,7 @@ output "bucket_objects" {
   value = {
     for k, obj in google_storage_bucket_object.bucket_object : k => {
       self_link = obj.self_link
+      name      = obj.name
       md5hash   = obj.md5hash
     }
   }

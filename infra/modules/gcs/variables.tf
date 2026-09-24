@@ -221,7 +221,7 @@ variable "notifications" {
   description = "List of Pub/Sub notification configurations for the bucket."
   type = list(object({
     event_types         = optional(list(string))
-    payload_format      = string
+    payload_format      = optional(string)
     topic_id            = string
     object_name_prefix  = optional(string)
     custom_attributes   = optional(map(string))
