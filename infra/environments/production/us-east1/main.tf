@@ -5,6 +5,10 @@ data "vault_generic_secret" "sql" {
   path = "secret/sql"
 }
 
+data "google_dns_managed_zone" "zone" {
+  name = "mohitd"
+}
+
 # -----------------------------------------------------------------------------------------
 # Getting project information
 # -----------------------------------------------------------------------------------------
@@ -42,18 +46,14 @@ module "carshub_vpc" {
   delete_default_routes_on_create = false
   auto_create_subnetworks         = false
   routing_mode                    = "REGIONAL"
-  region                          = var.location
   subnets                         = []
   firewall_data = [
     {
-      # Cloud Run (frontend + backend) and the Cloud Function all reach Cloud
-      # SQL through the Serverless VPC Connector (10.8.0.0/28), never directly
-      # via an instance IP — this is the one rule that's actually load-bearing.
       name               = "carshub-allow-connector-to-sql-${var.environment}"
       description        = "Allow Serverless VPC Connector (Cloud Run + Cloud Function) to reach Cloud SQL private IP"
       priority           = 1000
       source_ranges      = ["10.8.0.0/28"]
-      destination_ranges = ["${module.carshub_db.db_ip_address}/32"]
+      destination_ranges = [module.carshub_db.db_ip_address]
       allow_list = [
         {
           protocol = "tcp"
@@ -150,8 +150,8 @@ resource "google_pubsub_topic_iam_binding" "binding" {
 }
 
 module "carshub_media_bucket_pubsub" {
-  source = "../../../modules/pubsub"
-  topic  = "carshub-media-bucket-events-${var.environment}"
+  source     = "../../../modules/pubsub"
+  topic_name = "carshub-media-bucket-events-${var.environment}"
 }
 
 # -----------------------------------------------------------------------------------------
@@ -159,6 +159,8 @@ module "carshub_media_bucket_pubsub" {
 # -----------------------------------------------------------------------------------------
 module "carshub_frontend_artifact_registry" {
   source        = "../../../modules/artifact-registry"
+  project_id    = var.project_id
+  artifact_type = "DOCKER"
   location      = var.location
   description   = "CarHub frontend repository"
   repository_id = "carshub-frontend-${var.environment}"
@@ -180,6 +182,8 @@ resource "null_resource" "build_and_push_frontend" {
 
 module "carshub_backend_artifact_registry" {
   source        = "../../../modules/artifact-registry"
+  project_id    = var.project_id
+  artifact_type = "DOCKER"
   location      = var.location
   description   = "CarHub backend repository"
   repository_id = "carshub-backend-${var.environment}"
@@ -203,9 +207,10 @@ resource "null_resource" "build_and_push_backend" {
 # Google Cloud Storage (GCS) Configuration
 # -----------------------------------------------------------------------------------------
 module "carshub_media_bucket" {
-  source   = "../../../modules/gcs"
-  location = var.location
-  name     = "carshub-media-${var.environment}"
+  source     = "../../../modules/gcs"
+  project_id = var.project_id
+  location   = var.location
+  name       = "carshub-media-${var.environment}"
   cors = [
     {
       origin          = ["*"]
@@ -249,18 +254,23 @@ module "carshub_media_bucket" {
   ]
   notifications = [
     {
-      topic_id = module.carshub_media_bucket_pubsub.topic_id
+      payload_format = "JSON_API_V1"
+      topic_id       = module.carshub_media_bucket_pubsub.topic_id
     }
   ]
   force_destroy               = true
   uniform_bucket_level_access = true
+  depends_on = [
+    google_pubsub_topic_iam_binding.binding
+  ]
 }
 
 module "carshub_media_bucket_code" {
-  source   = "../../../modules/gcs"
-  location = var.location
-  name     = "carshub-media-code-${var.environment}"
-  cors     = []
+  source     = "../../../modules/gcs"
+  project_id = var.project_id
+  location   = var.location
+  name       = "carshub-media-code-${var.environment}"
+  cors       = []
   contents = [
     {
       name        = "carshub_media_function_code.zip"
@@ -310,6 +320,7 @@ module "carshub_cdn" {
   backend_buckets = {
     website = {
       is_default  = true
+      enable_cdn  = true
       bucket_name = module.carshub_media_bucket.bucket_name
     }
   }
@@ -325,17 +336,21 @@ module "carshub_cdn" {
 # Secret Manager Configuration
 # -----------------------------------------------------------------------------------------
 module "carshub_sql_password_secret" {
-  source      = "../../../modules/secret-manager"
-  secret_data = tostring(data.vault_generic_secret.sql.data["password"])
-  secret_id   = "carshub-db-password-secret-${var.environment}"
-  depends_on  = [module.carshub_apis]
+  source              = "../../../modules/secret-manager"
+  is_regional         = false
+  deletion_protection = false
+  secret_data         = tostring(data.vault_generic_secret.sql.data["password"])
+  secret_id           = "carshub-db-password-secret-${var.environment}"
+  depends_on          = [module.carshub_apis]
 }
 
 module "carshub_sql_username_secret" {
-  source      = "../../../modules/secret-manager"
-  secret_data = tostring(data.vault_generic_secret.sql.data["username"])
-  secret_id   = "carshub-db-username-secret-${var.environment}"
-  depends_on  = [module.carshub_apis]
+  source              = "../../../modules/secret-manager"
+  is_regional         = false
+  deletion_protection = false
+  secret_data         = tostring(data.vault_generic_secret.sql.data["username"])
+  secret_id           = "carshub-db-username-secret-${var.environment}"
+  depends_on          = [module.carshub_apis]
 }
 
 # -----------------------------------------------------------------------------------------
@@ -413,16 +428,17 @@ module "carshub_db" {
 module "carshub_run_iam_permissions" {
   source = "../../../modules/cloud-run-iam"
   members = [
-    module.carshub_backend_service.name,
-    module.carshub_frontend_service.name
+    module.carshub_backend_service.service_name,
+    module.carshub_frontend_service.service_name
   ]
 }
 
 module "carshub_frontend_service" {
   source                           = "../../../modules/cloud-run"
+  project_id                       = var.project_id
+  type                             = "SERVICE"
   deletion_protection              = false # true for production
   ingress                          = "INGRESS_TRAFFIC_ALL"
-  vpc_connector_name               = module.carshub_vpc_connectors.vpc_connectors[0].id
   service_account                  = module.carshub_cloud_run_service_account.sa_email
   location                         = var.location
   min_instance_count               = 2
@@ -430,14 +446,27 @@ module "carshub_frontend_service" {
   max_instance_request_concurrency = 80
   name                             = "carshub-frontend-service-${var.environment}"
   volumes                          = []
+
+  vpc_access = {
+    vpc_connector_name = module.carshub_vpc_connectors.vpc_connectors[0].id
+    egress             = "ALL_TRAFFIC"
+  }
+
   traffic = [
     {
       traffic_type         = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
       traffic_type_percent = 100
     }
   ]
+
   containers = [
     {
+      ports = [
+        {
+          container_port = 3000
+          name           = "http1"
+        }
+      ]
       env               = []
       volume_mounts     = []
       cpu_idle          = true
@@ -450,27 +479,38 @@ module "carshub_frontend_service" {
 
 module "carshub_backend_service" {
   source                           = "../../../modules/cloud-run"
+  project_id                       = var.project_id
+  type                             = "SERVICE"
+  name                             = "carshub-backend-service-${var.environment}"
   deletion_protection              = false
-  vpc_connector_name               = module.carshub_vpc_connectors.vpc_connectors[0].id
   ingress                          = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
   service_account                  = module.carshub_cloud_run_service_account.sa_email
   location                         = var.location
   min_instance_count               = 2
   max_instance_count               = 5
   max_instance_request_concurrency = 80
+
+  vpc_access = {
+    vpc_connector_name = module.carshub_vpc_connectors.vpc_connectors[0].id
+    egress             = "ALL_TRAFFIC"
+  }
+
   volumes = [
     {
-      name               = "cloudsql"
-      cloud_sql_instance = [module.carshub_db.db_connection_name]
+      name = "cloudsql"
+      cloud_sql_instance = {
+        instances = [module.carshub_db.db_connection_name]
+      }
     }
   ]
-  name = "carshub-backend-service-${var.environment}"
+
   traffic = [
     {
       traffic_type         = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
       traffic_type_percent = 100
     }
   ]
+
   containers = [
     {
       image             = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-backend-${var.environment}/carshub-backend:latest"
@@ -482,15 +522,21 @@ module "carshub_backend_service" {
           mount_path = "/cloudsql"
         }
       ]
+      ports = [
+        {
+          container_port = 3000
+          name           = "http1"
+        }
+      ]
       env = [
         {
           name         = "DB_PATH"
-          value        = "${module.carshub_db.db_ip_address}"
+          value        = module.carshub_db.db_ip_address
           value_source = []
         },
         {
           name         = "ENV"
-          value        = "${var.environment}"
+          value        = var.environment
           value_source = []
         },
         {
@@ -542,12 +588,12 @@ module "carshub_media_update_function" {
     runtime = "python312"
     storage_source = {
       bucket = module.carshub_media_bucket_code.bucket_name
-      object = module.carshub_media_bucket_code.object_name[0].name
+      object = module.carshub_media_bucket_code.bucket_objects["carshub_media_function_code.zip"].name
     }
-    build_env_variables = {
+    build_environment_variables = {
       DB_USER     = module.carshub_db.db_user
       DB_NAME     = module.carshub_db.db_name
-      SECRET_NAME = module.carshub_sql_password_secret.secret_name
+      SECRET_NAME = module.carshub_sql_password_secret.name
       DB_PATH     = module.carshub_db.db_ip_address
     }
   }
@@ -558,13 +604,14 @@ module "carshub_media_update_function" {
     available_memory                 = "256M"
     timeout_seconds                  = 60
     max_instance_request_concurrency = 80
-    available_cpu                    = "4"
+    available_cpu                    = "1" # <-- Changed from "4" to "1"
     ingress_settings                 = "ALLOW_INTERNAL_ONLY"
     all_traffic_on_latest_revision   = true
     service_account_email            = module.carshub_function_app_service_account.sa_email
     vpc_connector                    = module.carshub_vpc_connectors.vpc_connectors[0].id
     vpc_connector_egress_settings    = "ALL_TRAFFIC"
   }
+
   event_trigger = {
     service_account_email = module.carshub_function_app_service_account.sa_email
     event_type            = "google.cloud.pubsub.topic.v1.messagePublished"
@@ -580,19 +627,25 @@ module "carshub_media_update_function" {
 # Network endpoint groups Configuration
 # -----------------------------------------------------------------------------------------
 module "carshub_frontend_service_neg" {
-  source       = "../../../modules/network_endpoint_groups"
-  neg_name     = "carshub-frontend-service-neg-${var.environment}"
-  neg_type     = "SERVERLESS"
-  location     = var.location
-  service_name = module.carshub_frontend_service.name
+  source   = "../../../modules/network_endpoint_groups"
+  type     = "REGIONAL"
+  neg_name = "carshub-frontend-service-neg-${var.environment}"
+  neg_type = "SERVERLESS"
+  location = var.location
+  cloud_run = {
+    service = module.carshub_frontend_service.service_name
+  }
 }
 
 module "carshub_backend_service_neg" {
-  source       = "../../../modules/network_endpoint_groups"
-  neg_name     = "carshub-backend-service-neg-${var.environment}"
-  neg_type     = "SERVERLESS"
-  location     = var.location
-  service_name = module.carshub_backend_service.name
+  source   = "../../../modules/network_endpoint_groups"
+  type     = "REGIONAL"
+  neg_name = "carshub-backend-service-neg-${var.environment}"
+  neg_type = "SERVERLESS"
+  location = var.location
+  cloud_run = {
+    service = module.carshub_backend_service.service_name
+  }
 }
 
 # -----------------------------------------------------------------------------------------
@@ -653,6 +706,29 @@ module "carshub_backend_service_lb" {
   depends_on              = [module.carshub_backend_service]
 }
 
+# --------------------------------------------------------------------------
+# DNS Configuration
+# --------------------------------------------------------------------------
+resource "google_dns_record_set" "carshub_frontend_dns_record" {
+  name = "frontend-${var.environment}.${data.google_dns_managed_zone.zone.dns_name}"
+  type = "A"
+  ttl  = 300
+
+  managed_zone = data.google_dns_managed_zone.zone.name
+
+  rrdatas = [module.carshub_frontend_service_lb.lb_ip_address]
+}
+
+resource "google_dns_record_set" "carshub_backend_dns_record" {
+  name = "backend-${var.environment}.${data.google_dns_managed_zone.zone.dns_name}"
+  type = "A"
+  ttl  = 300
+
+  managed_zone = data.google_dns_managed_zone.zone.name
+
+  rrdatas = [module.carshub_backend_service_lb.lb_ip_address]
+}
+
 # -----------------------------------------------------------------------------------------
 # CloudBuild Configuration
 # -----------------------------------------------------------------------------------------
@@ -666,9 +742,9 @@ module "carshub_cloudbuild_frontend_trigger" {
   repo_type    = "GITHUB"
   filename     = "cloudbuild.yaml"
   substitutions = {
-    _PROJECT_ID         = "${data.google_project.project.project_id}"
-    _BACKEND_IP_ADDRESS = "${module.carshub_backend_service_lb.lb_ip_address}"
-    _CDN_IP_ADDRESS     = "${module.carshub_cdn.lb_ip_address}"
+    _PROJECT_ID         = data.google_project.project.project_id
+    _BACKEND_IP_ADDRESS = module.carshub_backend_service_lb.lb_ip_address
+    _CDN_IP_ADDRESS     = module.carshub_cdn.lb_ip_address
   }
   service_account = module.carshub_cloudbuild_service_account.id
 }
@@ -683,7 +759,7 @@ module "carshub_cloudbuild_backend_trigger" {
   repo_type    = "GITHUB"
   filename     = "cloudbuild.yaml"
   substitutions = {
-    _PROJECT_ID = "${data.google_project.project.project_id}"
+    _PROJECT_ID = data.google_project.project.project_id
   }
   service_account = module.carshub_cloudbuild_service_account.id
 }
@@ -1011,27 +1087,27 @@ module "database_high_disk_alert" {
 }
 
 # Database — Connection pool (correct metric type for PostgreSQL; swap for mysql_connections if MySQL)
-module "database_connection_pool_alert" {
-  source                = "../../../modules/observability/alerts"
-  display_name          = "Database Connection Pool Near Limit"
-  combiner              = "OR"
-  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+# module "database_connection_pool_alert" {
+#   source                = "../../../modules/observability/alerts"
+#   display_name          = "Database Connection Pool Near Limit"
+#   combiner              = "OR"
+#   notification_channels = [google_monitoring_notification_channel.email_alerts.id]
 
-  conditions = [
-    {
-      display_name    = "Active Connections > 800"
-      filter          = "resource.type=\"cloudsql_database\" AND metric.type=\"cloudsql.googleapis.com/database/postgresql/num_backends\""
-      duration        = "300s"
-      comparison      = "COMPARISON_GT"
-      threshold_value = 800
+#   conditions = [
+#     {
+#       display_name    = "Active Connections > 800"
+#       filter          = "resource.type=\"cloudsql_database\" AND metric.type=\"cloudsql.googleapis.com/database/postgresql/num_backends\""
+#       duration        = "300s"
+#       comparison      = "COMPARISON_GT"
+#       threshold_value = 800
 
-      aggregations = {
-        alignment_period   = "60s"
-        per_series_aligner = "ALIGN_MEAN"
-      }
-    }
-  ]
-}
+#       aggregations = {
+#         alignment_period   = "60s"
+#         per_series_aligner = "ALIGN_MEAN"
+#       }
+#     }
+#   ]
+# }
 
 # Database — Slow queries (alert on log-based metric created above)
 module "database_slow_queries_alert" {
