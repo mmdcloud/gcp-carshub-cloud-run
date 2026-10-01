@@ -112,6 +112,13 @@ variable "service_config" {
 
     binary_authorization_policy = optional(string)
 
+    direct_vpc_egress = optional(string)
+    direct_vpc_network_interface = optional(list(object({
+      network    = optional(string)
+      subnetwork = optional(string)
+      tags       = optional(list(string))
+    })))
+
     secret_environment_variables = optional(list(object({
       key        = string
       project_id = optional(string)

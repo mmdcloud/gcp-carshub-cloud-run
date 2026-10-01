@@ -179,11 +179,11 @@ variable "volumes" {
 variable "vpc_access" {
   description = "VPC access configuration. Set to null to omit the vpc_access block."
   type = object({
-    vpc_connector_name = string
-    egress = string
+    vpc_connector_name = optional(string)
+    egress             = optional(string)
     network_interfaces = optional(list(object({
-      network    = string
-      subnetwork = string
+      network    = optional(string)
+      subnetwork = optional(string)
       tags       = optional(list(string))
     })), [])
   })
@@ -229,10 +229,10 @@ variable "containers" {
 
     # SERVICE only
     readiness_probe = optional(list(object({
-      failure_threshold  = optional(number)
-      period_seconds      = optional(number)
-      success_threshold   = optional(number)
-      timeout_seconds      = optional(number)
+      failure_threshold = optional(number)
+      period_seconds    = optional(number)
+      success_threshold = optional(number)
+      timeout_seconds   = optional(number)
       grpc = optional(list(object({
         port    = optional(number)
         service = optional(string)
@@ -246,9 +246,9 @@ variable "containers" {
     # SERVICE only
     liveness_probe = optional(list(object({
       failure_threshold     = optional(number)
-      period_seconds         = optional(number)
-      timeout_seconds         = optional(number)
-      initial_delay_seconds   = optional(number)
+      period_seconds        = optional(number)
+      timeout_seconds       = optional(number)
+      initial_delay_seconds = optional(number)
       grpc = optional(list(object({
         port    = optional(number)
         service = optional(string)
@@ -264,10 +264,10 @@ variable "containers" {
 
     # JOB and SERVICE
     startup_probe = optional(list(object({
-      failure_threshold      = optional(number)
-      initial_delay_seconds   = optional(number)
-      period_seconds          = optional(number)
-      timeout_seconds          = optional(number)
+      failure_threshold     = optional(number)
+      initial_delay_seconds = optional(number)
+      period_seconds        = optional(number)
+      timeout_seconds       = optional(number)
       grpc = optional(list(object({
         port    = optional(number)
         service = optional(string)
@@ -398,12 +398,12 @@ variable "conditions" {
   type = object({
     execution_reason     = optional(string)
     last_transition_time = optional(string)
-    message               = optional(string)
-    reason                = optional(string)
-    revision_reason       = optional(string)
-    severity              = optional(string)
-    state                 = optional(string)
-    type                  = optional(string)
+    message              = optional(string)
+    reason               = optional(string)
+    revision_reason      = optional(string)
+    severity             = optional(string)
+    state                = optional(string)
+    type                 = optional(string)
   })
   default = null
 }

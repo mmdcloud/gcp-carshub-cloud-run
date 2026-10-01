@@ -46,7 +46,26 @@ module "carshub_vpc" {
   delete_default_routes_on_create = false
   auto_create_subnetworks         = false
   routing_mode                    = "REGIONAL"
-  subnets                         = []
+  subnets = [
+    {
+      name                     = "carshub-frontend-cloud-run-subnet-${var.environment}"
+      region                   = var.location
+      private_ip_google_access = true
+      ip_cidr_range            = "10.10.0.0/24"
+    },
+    {
+      name                     = "carshub-backend-cloud-run-subnet-${var.environment}"
+      region                   = var.location
+      private_ip_google_access = true
+      ip_cidr_range            = "10.20.0.0/24"
+    },
+    {
+      name                     = "carshub-media-update-function-subnet-${var.environment}"
+      region                   = var.location
+      private_ip_google_access = true
+      ip_cidr_range            = "10.30.0.0/24"
+    }
+  ]
   firewall_data = [
     {
       name               = "carshub-allow-connector-to-sql-${var.environment}"
@@ -79,19 +98,19 @@ module "carshub_vpc" {
 # -----------------------------------------------------------------------------------------
 # Serverless VPC Connectors
 # -----------------------------------------------------------------------------------------
-module "carshub_vpc_connectors" {
-  source   = "../../../modules/network/vpc-connector"
-  vpc_name = module.carshub_vpc.vpc_name
-  serverless_vpc_connectors = [
-    {
-      name          = "carshub-connector-${var.environment}"
-      ip_cidr_range = "10.8.0.0/28"
-      min_instances = 2
-      max_instances = 3
-      machine_type  = "e2-micro"
-    }
-  ]
-}
+# module "carshub_vpc_connectors" {
+#   source   = "../../../modules/network/vpc-connector"
+#   vpc_name = module.carshub_vpc.vpc_name
+#   serverless_vpc_connectors = [
+#     {
+#       name          = "carshub-connector-${var.environment}"
+#       ip_cidr_range = "10.8.0.0/28"
+#       min_instances = 2
+#       max_instances = 3
+#       machine_type  = "e2-micro"
+#     }
+#   ]
+# }
 
 # -----------------------------------------------------------------------------------------
 # Service Accounts
@@ -365,12 +384,13 @@ module "carshub_db" {
   location                    = var.location
   tier                        = "db-custom-2-8192"
   availability_type           = "REGIONAL"
-  disk_size                   = 100 # GB
+  disk_size                   = 10 # GB
   disk_type                   = "PD_SSD"
   disk_autoresize             = true
-  disk_autoresize_limit       = 500 # GB
+  disk_autoresize_limit       = 50 # GB
   ipv4_enabled                = false
   deletion_protection_enabled = false # true for production
+
   backup_configuration = [
     {
       enabled                        = true
@@ -386,6 +406,7 @@ module "carshub_db" {
       ]
     }
   ]
+
   database_flags = [
     {
       name  = "general_log"
@@ -416,6 +437,7 @@ module "carshub_db" {
       value = "FILE"
     }
   ]
+
   vpc_self_link = module.carshub_vpc.self_link
   vpc_id        = module.carshub_vpc.vpc_id
   password      = module.carshub_sql_password_secret.secret_data
@@ -448,8 +470,15 @@ module "carshub_frontend_service" {
   volumes                          = []
 
   vpc_access = {
-    vpc_connector_name = module.carshub_vpc_connectors.vpc_connectors[0].id
-    egress             = "ALL_TRAFFIC"
+    # vpc_connector_name = module.carshub_vpc_connectors.vpc_connectors[0].id
+    egress = "PRIVATE_RANGES_ONLY"
+
+    network_interfaces = [
+      {
+        network    = module.carshub_vpc.vpc_id
+        subnetwork = module.carshub_vpc.subnets["carshub-frontend-cloud-run-subnet-${var.environment}"].name
+      }
+    ]
   }
 
   traffic = [
@@ -491,8 +520,14 @@ module "carshub_backend_service" {
   max_instance_request_concurrency = 80
 
   vpc_access = {
-    vpc_connector_name = module.carshub_vpc_connectors.vpc_connectors[0].id
-    egress             = "ALL_TRAFFIC"
+    egress = "PRIVATE_RANGES_ONLY"
+
+    network_interfaces = [
+      {
+        network    = module.carshub_vpc.vpc_id
+        subnetwork = module.carshub_vpc.subnets["carshub-backend-cloud-run-subnet-${var.environment}"].name
+      }
+    ]
   }
 
   volumes = [
@@ -608,8 +643,16 @@ module "carshub_media_update_function" {
     ingress_settings                 = "ALLOW_INTERNAL_ONLY"
     all_traffic_on_latest_revision   = true
     service_account_email            = module.carshub_function_app_service_account.sa_email
-    vpc_connector                    = module.carshub_vpc_connectors.vpc_connectors[0].id
-    vpc_connector_egress_settings    = "ALL_TRAFFIC"
+    # vpc_connector                    = module.carshub_vpc_connectors.vpc_connectors[0].id
+    # vpc_connector_egress_settings = "PRIVATE_RANGES_ONLY"
+
+    direct_vpc_egress = "VPC_EGRESS_PRIVATE_RANGES_ONLY"
+    direct_vpc_network_interface = [
+      {
+        network    = module.carshub_vpc.vpc_id
+        subnetwork = module.carshub_vpc.subnets["carshub-media-update-function-subnet-${var.environment}"].name
+      }
+    ]
   }
 
   event_trigger = {

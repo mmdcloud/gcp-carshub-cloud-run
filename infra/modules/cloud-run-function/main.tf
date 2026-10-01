@@ -8,7 +8,7 @@ resource "google_cloudfunctions2_function" "function" {
   location    = var.location
   description = var.function_description
   labels      = var.labels
-  
+
 
   kms_key_name = var.kms_key_name
 
@@ -72,6 +72,17 @@ resource "google_cloudfunctions2_function" "function" {
           project_id = coalesce(secret_environment_variables.value.project_id, var.project_id)
           secret     = secret_environment_variables.value.secret
           version    = secret_environment_variables.value.version
+        }
+      }
+
+      direct_vpc_egress = service_config.value.direct_vpc_egress
+      
+      dynamic "direct_vpc_network_interface" {
+        for_each = service_config.value.direct_vpc_network_interface
+        content {
+          network    = direct_vpc_network_interface.value.network
+          subnetwork = direct_vpc_network_interface.value.subnetwork
+          tags       = direct_vpc_network_interface.value.tags
         }
       }
 
