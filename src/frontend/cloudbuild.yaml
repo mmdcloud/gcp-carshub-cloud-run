@@ -1,47 +1,229 @@
-steps:
-  # Step 1: Set up Docker image build and push to Google Artifact Registry
-  - name: 'bash'
-    script: |
-      cat > .env << EOL
-        BASE_URL=${_BACKEND_IP_ADDRESS}
-        CDN_URL=${_CDN_IP_ADDRESS}
-      EOL
-  - name: "gcr.io/cloud-builders/docker"
-    args:
-      [
-        "build",
-        "-t",
-        "us-central1-docker.pkg.dev/${_PROJECT_ID}/carshub-frontend/carshub-frontend:$COMMIT_SHA",
-        "frontend/.",
-      ]
+# =============================================================================
+# CarsHub FRONTEND - Cloud Build (DevSecOps)
+# Branch: frontend
+#
+# Parallel gates : secrets scan | SAST | deps audit + lint + test | Dockerfile lint
+# Then           : build -> Trivy image scan + SBOM -> push -> (attest) -> canary deploy
+#                  -> promote -> smoke test -> auto-rollback on failure
+#
+# Notes
+# - Pin every builder image to a digest in prod (Renovate/Dependabot can bump them).
+# - SHORT_SHA / COMMIT_SHA only exist for trigger-based builds, not `gcloud builds submit`.
+# - Cloud Build SA is custom, so `logging: CLOUD_LOGGING_ONLY` is mandatory.
+# =============================================================================
 
-  # Step 2: Push the image to Google Artifact Registry
-  - name: "gcr.io/cloud-builders/docker"
-    args:
-      [
-        "push",
-        "us-central1-docker.pkg.dev/${_PROJECT_ID}/carshub-frontend/carshub-frontend:$COMMIT_SHA",
-      ]
-
-  # Step 3: Deploy the Docker image to Cloud Run
-  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
-    args:
-      - "gcloud"
-      - "run"
-      - "deploy"
-      - "carshub-frontend-service"
-      - "--image"
-      - "us-central1-docker.pkg.dev/${_PROJECT_ID}/carshub-frontend/carshub-frontend:$COMMIT_SHA"
-      - "--region"
-      - "us-central1"
-      - "--platform"
-      - "managed"
-      - "--port"
-      - "3000"
-      - "--allow-unauthenticated"
-
-images:
-  - "us-central1-docker.pkg.dev/${_PROJECT_ID}/carshub-frontend/carshub-frontend:$COMMIT_SHA"
+substitutions:
+  _PROJECT_ID: ""
+  _ENVIRONMENT: dev
+  _REGION: us-central1
+  _BACKEND_IP_ADDRESS: ""
+  _CDN_IP_ADDRESS: ""
+  _APP_DIR: "."
+  _IMAGE: "${_REGION}-docker.pkg.dev/${_PROJECT_ID}/carshub-frontend-${_ENVIRONMENT}/carshub-frontend"
+  _SERVICE: "carshub-frontend-service-${_ENVIRONMENT}"
+  _TRIVY_SEVERITY: "HIGH,CRITICAL"
+  # Optional: e.g. http://<frontend-lb-ip>/auth/signin  (empty = skip smoke test)
+  _SMOKE_TEST_URL: ""
+  # Optional: bucket name (no gs://) to archive the SBOM
+  _SBOM_BUCKET: ""
+  # Optional Binary Authorization. Attestor name + full KMS key version resource path:
+  # projects/P/locations/L/keyRings/R/cryptoKeys/K/cryptoKeyVersions/1
+  _BINAUTHZ_ATTESTOR: ""
+  _BINAUTHZ_KMS_KEY_VERSION: ""
 
 options:
   logging: CLOUD_LOGGING_ONLY
+  dynamicSubstitutions: true
+  machineType: E2_HIGHCPU_8
+  requestedVerifyOption: VERIFIED # SLSA provenance for images listed below
+
+timeout: 1800s
+tags: ["carshub", "frontend", "devsecops"]
+
+steps:
+  # ---------------------------------------------------------------- GATES ----
+  - id: secrets-scan
+    name: zricethezav/gitleaks:v8.21.2
+    dir: ${_APP_DIR}
+    args: ["detect", "--source=.", "--no-git", "--redact", "--verbose", "--exit-code=1"]
+    waitFor: ["-"]
+
+  - id: sast
+    name: semgrep/semgrep:1.99.0
+    dir: ${_APP_DIR}
+    entrypoint: semgrep
+    args:
+      - scan
+      - --config=p/default
+      - --config=p/nodejs
+      - --severity=ERROR
+      - --error
+      - --metrics=off
+      - --exclude=node_modules
+      - .
+    waitFor: ["-"]
+
+  - id: deps-lint-test
+    name: node:20-slim
+    dir: ${_APP_DIR}
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        npm ci
+        npm audit --omit=dev --audit-level=high
+        npm run lint --if-present
+        npm test --if-present
+    waitFor: ["-"]
+
+  - id: dockerfile-lint
+    name: hadolint/hadolint:v2.12.0-alpine
+    dir: ${_APP_DIR}
+    entrypoint: hadolint
+    args: ["--failure-threshold", "warning", "Dockerfile"]
+    waitFor: ["-"]
+
+  # ---------------------------------------------------------------- BUILD ----
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    dir: ${_APP_DIR}
+    env: ["DOCKER_BUILDKIT=1"]
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        docker pull "${_IMAGE}:latest" || true
+
+        # Mirrors artifact_push.sh: it writes .env into the build context and the
+        # Dockerfile COPYs it in.
+        #   $1 -> BASE_URL = http://<backend-lb-ip>
+        #   $2 -> CDN_URL  = <cdn-lb-ip>
+        #   $3 / $4 (project, environment) only build the image path, via _IMAGE.
+        cat > .env <<EOL
+        BASE_URL=http://${_BACKEND_IP_ADDRESS}
+        CDN_URL=${_CDN_IP_ADDRESS}
+        EOL
+
+        docker build \
+          --cache-from "${_IMAGE}:latest" \
+          --build-arg BUILDKIT_INLINE_CACHE=1 \
+          --label org.opencontainers.image.revision="${COMMIT_SHA}" \
+          --label org.opencontainers.image.source="https://github.com/mmdcloud/gcp-carshub-cloud-run" \
+          --label org.opencontainers.image.version="${SHORT_SHA}" \
+          -t "${_IMAGE}:${SHORT_SHA}" \
+          -t "${_IMAGE}:latest" \
+          .
+        docker save -o /workspace/image.tar "${_IMAGE}:${SHORT_SHA}"
+    waitFor: ["secrets-scan", "sast", "deps-lint-test", "dockerfile-lint"]
+
+  # -------------------------------------------- IMAGE SCAN + SBOM (pre-push) --
+  - id: image-scan
+    name: aquasec/trivy:0.57.1
+    entrypoint: sh
+    args:
+      - -c
+      - |
+        set -eu
+        trivy image --input /workspace/image.tar --cache-dir /workspace/.trivy \
+          --format cyclonedx --output /workspace/sbom.cdx.json --no-progress
+        trivy image --input /workspace/image.tar --cache-dir /workspace/.trivy \
+          --scanners vuln,secret --severity "${_TRIVY_SEVERITY}" \
+          --ignore-unfixed --exit-code 1 --no-progress
+    waitFor: ["build"]
+
+  # ----------------------------------------------------------------- PUSH ----
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        docker push "${_IMAGE}:${SHORT_SHA}"
+        docker push "${_IMAGE}:latest"
+        docker inspect --format='{{index .RepoDigests 0}}' "${_IMAGE}:${SHORT_SHA}" > /workspace/image_digest.txt
+        echo "Pushed: $(cat /workspace/image_digest.txt)"
+    waitFor: ["image-scan"]
+
+  - id: publish-sbom
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim # pin version/digest in prod
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        if [ -z "${_SBOM_BUCKET}" ]; then echo "No _SBOM_BUCKET set, skipping SBOM upload"; exit 0; fi
+        gcloud storage cp /workspace/sbom.cdx.json "gs://${_SBOM_BUCKET}/frontend/${SHORT_SHA}/sbom.cdx.json"
+    waitFor: ["push"]
+
+  - id: attest
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        if [ -z "${_BINAUTHZ_ATTESTOR}" ]; then echo "No attestor set, skipping attestation"; exit 0; fi
+        IFS='/' read -r -a K <<< "${_BINAUTHZ_KMS_KEY_VERSION}"
+        gcloud beta container binauthz attestations sign-and-create \
+          --project="${_PROJECT_ID}" \
+          --artifact-url="$$(cat /workspace/image_digest.txt)" \
+          --attestor="${_BINAUTHZ_ATTESTOR}" \
+          --attestor-project="${_PROJECT_ID}" \
+          --keyversion-project="$${K[1]}" \
+          --keyversion-location="$${K[3]}" \
+          --keyversion-keyring="$${K[5]}" \
+          --keyversion-key="$${K[7]}" \
+          --keyversion="$${K[9]}"
+    waitFor: ["push"]
+
+  # --------------------------------------------- CANARY DEPLOY -> PROMOTE ----
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        IMAGE_REF="$$(cat /workspace/image_digest.txt)"   # deploy by digest, never by tag
+        PREV_REV="$$(gcloud run services describe "${_SERVICE}" --region="${_REGION}" \
+          --project="${_PROJECT_ID}" --format='value(status.latestReadyRevisionName)' 2>/dev/null || true)"
+
+        BINAUTHZ_FLAG=""
+        if [ -n "${_BINAUTHZ_ATTESTOR}" ]; then BINAUTHZ_FLAG="--binary-authorization=default"; fi
+
+        # 1. Deploy new revision with 0% traffic (fails here if the revision can't become Ready)
+        gcloud run deploy "${_SERVICE}" \
+          --image="$$IMAGE_REF" \
+          --region="${_REGION}" \
+          --project="${_PROJECT_ID}" \
+          --no-traffic \
+          --tag="sha-${SHORT_SHA}" \
+          $$BINAUTHZ_FLAG \
+          --quiet
+
+        # 2. Promote
+        gcloud run services update-traffic "${_SERVICE}" \
+          --region="${_REGION}" --project="${_PROJECT_ID}" --to-latest --quiet
+
+        # 3. Smoke test through the public LB; roll back on failure
+        if [ -n "${_SMOKE_TEST_URL}" ]; then
+          if ! curl --fail --silent --show-error --retry 6 --retry-delay 5 --retry-all-errors \
+               --max-time 10 -o /dev/null "${_SMOKE_TEST_URL}"; then
+            echo "Smoke test FAILED. Rolling back to $$PREV_REV"
+            if [ -n "$$PREV_REV" ]; then
+              gcloud run services update-traffic "${_SERVICE}" \
+                --region="${_REGION}" --project="${_PROJECT_ID}" \
+                --to-revisions="$$PREV_REV=100" --quiet
+            fi
+            exit 1
+          fi
+          echo "Smoke test passed"
+        fi
+    waitFor: ["attest", "publish-sbom"]
+
+images:
+  - "${_IMAGE}:${SHORT_SHA}"
+  - "${_IMAGE}:latest"

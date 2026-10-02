@@ -186,18 +186,18 @@ module "carshub_frontend_artifact_registry" {
   depends_on    = [module.carshub_apis]
 }
 
-resource "null_resource" "build_and_push_frontend" {
-  triggers = {
-    always_run = timestamp()
-  }
-  provisioner "local-exec" {
-    command = "bash ${path.cwd}/../../../../src/frontend/artifact_push.sh http://${module.carshub_backend_service_lb.lb_ip_address} ${module.carshub_cdn.lb_ip_address} ${data.google_project.project.project_id} ${var.environment}"
-  }
+# resource "null_resource" "build_and_push_frontend" {
+#   triggers = {
+#     always_run = timestamp()
+#   }
+#   provisioner "local-exec" {
+#     command = "bash ${path.cwd}/../../../../src/frontend/artifact_push.sh http://${module.carshub_backend_service_lb.lb_ip_address} ${module.carshub_cdn.lb_ip_address} ${data.google_project.project.project_id} ${var.environment}"
+#   }
 
-  depends_on = [
-    module.carshub_frontend_artifact_registry
-  ]
-}
+#   depends_on = [
+#     module.carshub_frontend_artifact_registry
+#   ]
+# }
 
 module "carshub_backend_artifact_registry" {
   source        = "../../../modules/artifact-registry"
@@ -209,18 +209,18 @@ module "carshub_backend_artifact_registry" {
   depends_on    = [module.carshub_db, module.carshub_apis]
 }
 
-resource "null_resource" "build_and_push_backend" {
-  triggers = {
-    always_run = timestamp()
-  }
-  provisioner "local-exec" {
-    command = "bash ${path.cwd}/../../../../src/backend/api/artifact_push.sh ${data.google_project.project.project_id} ${var.environment}"
-  }
+# resource "null_resource" "build_and_push_backend" {
+#   triggers = {
+#     always_run = timestamp()
+#   }
+#   provisioner "local-exec" {
+#     command = "bash ${path.cwd}/../../../../src/backend/api/artifact_push.sh ${data.google_project.project.project_id} ${var.environment}"
+#   }
 
-  depends_on = [
-    module.carshub_backend_artifact_registry
-  ]
-}
+#   depends_on = [
+#     module.carshub_backend_artifact_registry
+#   ]
+# }
 
 # -----------------------------------------------------------------------------------------
 # Google Cloud Storage (GCS) Configuration
@@ -460,7 +460,7 @@ module "carshub_frontend_service" {
   project_id                       = var.project_id
   type                             = "SERVICE"
   deletion_protection              = false # true for production
-  ingress                          = "INGRESS_TRAFFIC_ALL"
+  ingress                          = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
   service_account                  = module.carshub_cloud_run_service_account.sa_email
   location                         = var.location
   min_instance_count               = 2
