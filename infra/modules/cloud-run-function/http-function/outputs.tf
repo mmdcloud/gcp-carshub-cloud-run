@@ -15,11 +15,3 @@ output "function_url" {
   description = "The HTTPS trigger URL (populated for HTTP-triggered functions)."
   value       = try(google_cloudfunctions2_function.function.service_config[0].uri, null)
 }
-
-output "function_state" {
-  value = google_cloudfunctions2_function.function.state
-}
-
-output "function_update_time" {
-  value = google_cloudfunctions2_function.function.update_time
-}

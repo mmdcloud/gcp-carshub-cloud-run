@@ -36,34 +36,12 @@ variable "kms_key_name" {
   default     = null
 }
 
-variable "function_service_account_email" {
-  description = "Default service account email, used as a fallback for the event trigger's service_account_email when the trigger doesn't specify its own."
-  type        = string
-  default     = null
-}
-
 # -----------------------------------------------------------------------------
-# Source configuration (storage vs repo)
-# -----------------------------------------------------------------------------
-variable "repo_source" {
-  description = "Repo source configuration used for the precondition check (required when source_type = \"repo\")."
-  type = object({
-    project_id  = optional(string)
-    repo_name   = optional(string)
-    branch_name = optional(string)
-    tag_name    = optional(string)
-    commit_sha  = optional(string)
-    dir         = optional(string)
-  })
-  default = null
-}
-
-# -----------------------------------------------------------------------------
-# Build configuration
+# Build Configuration
 # -----------------------------------------------------------------------------
 
 variable "build_config" {
-  description = "Build configuration block. Set to null to omit the build_config block entirely."
+  description = "Build configuration for compiling and packaging the event-driven function."
   type = object({
     runtime                     = string
     handler                     = string
@@ -86,91 +64,73 @@ variable "build_config" {
       dir         = optional(string)
     }))
   })
-  default = null
 }
 
 # -----------------------------------------------------------------------------
-# Service configuration
+# Service Configuration
 # -----------------------------------------------------------------------------
 
 variable "service_config" {
-  description = "Service (runtime) configuration block. Set to null to omit the service_config block entirely."
+  description = "Service configuration for Cloud Functions Gen 2"
   type = object({
-    max_instance_count               = optional(number)
-    min_instance_count               = optional(number)
+    max_instance_count               = optional(number, 10)
+    min_instance_count               = optional(number, 0)
     max_instance_request_concurrency = optional(number)
     available_memory                 = optional(string, "256M")
-    available_cpu                    = optional(string)
+    available_cpu                    = optional(string, "0.166")
     timeout_seconds                  = optional(number, 60)
-    ingress_settings                 = optional(string, "ALLOW_ALL")
+    ingress_settings                 = optional(string)
     all_traffic_on_latest_revision   = optional(bool, true)
     service_account_email            = optional(string)
     service_environment_variables    = optional(map(string), {})
-
-    vpc_connector                 = optional(string)
-    vpc_connector_egress_settings = optional(string)
-
-    binary_authorization_policy = optional(string)
-
-    direct_vpc_egress = optional(string)
-    direct_vpc_network_interface = optional(list(object({
-      network    = optional(string)
-      subnetwork = optional(string)
-      tags       = optional(list(string))
-    })))
+    vpc_connector                    = optional(string)
+    vpc_connector_egress_settings    = optional(string)
+    binary_authorization_policy      = optional(string)
 
     secret_environment_variables = optional(list(object({
       key        = string
       project_id = optional(string)
       secret     = string
-      version    = string
+      version    = optional(string, "latest")
     })), [])
 
     secret_volumes = optional(list(object({
       mount_path = string
       project_id = optional(string)
       secret     = string
-      versions = list(object({
+      versions = optional(list(object({
         version = string
         path    = string
-      }))
+      })), [])
     })), [])
   })
   default = null
 }
 
 # -----------------------------------------------------------------------------
-# Event trigger configuration
+# Event Trigger Configuration
 # -----------------------------------------------------------------------------
+
 variable "event_trigger" {
-  description = "Event trigger configuration. Set to null for HTTP-triggered functions."
+  description = "Eventarc/PubSub trigger configuration."
   type = object({
-    trigger_region        = optional(string)
     event_type            = string
+    trigger_region        = optional(string)
     pubsub_topic          = optional(string)
     service_account_email = optional(string)
-    retry_policy          = optional(string)
+    retry_policy          = optional(string, "RETRY_POLICY_DO_NOT_RETRY")
     event_filters = optional(list(object({
       attribute = string
       value     = string
       operator  = optional(string)
     })), [])
   })
-  default = null
-}
 
-# -----------------------------------------------------------------------------
-# IAM / invoker access
-# -----------------------------------------------------------------------------
-
-variable "grant_all_users_invoker" {
-  description = "If true, grants roles/run.invoker to allUsers (public access), overriding invoker_members."
-  type        = bool
-  default     = false
-}
-
-variable "invoker_members" {
-  description = "List of IAM members (e.g. \"user:...\", \"serviceAccount:...\") granted roles/run.invoker. Ignored if grant_all_users_invoker = true."
-  type        = list(string)
-  default     = []
+  validation {
+    condition = (
+      var.event_trigger.event_type != "google.cloud.pubsub.topic.v1.messagePublished" ||
+      var.event_trigger.pubsub_topic != null
+    )
+    error_message = "When event_type is 'google.cloud.pubsub.topic.v1.messagePublished', 'pubsub_topic' must be specified."
+  }
 }

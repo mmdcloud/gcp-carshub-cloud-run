@@ -68,29 +68,12 @@ module "carshub_vpc" {
   ]
   firewall_data = [
     {
-      name               = "carshub-allow-connector-to-sql-${var.environment}"
-      description        = "Allow Serverless VPC Connector (Cloud Run + Cloud Function) to reach Cloud SQL private IP"
+      name               = "carshub-allow-run-to-sql-${var.environment}"
+      description        = "Allow Cloud Run / Function subnets to reach Cloud SQL private IP"
       priority           = 1000
-      source_ranges      = ["10.8.0.0/28"]
-      destination_ranges = [module.carshub_db.db_ip_address]
-      allow_list = [
-        {
-          protocol = "tcp"
-          ports    = ["3306"]
-        }
-      ]
-    },
-    {
-      name          = "carshub-allow-connector-internal-${var.environment}"
-      description   = "Allow general internal traffic originating from the Serverless VPC Connector subnet"
-      priority      = 1000
-      source_ranges = ["10.8.0.0/28"]
-      allow_list = [
-        {
-          protocol = "tcp"
-          ports    = ["443", "8080"]
-        }
-      ]
+      source_ranges      = ["10.20.0.0/24", "10.30.0.0/24"]
+      destination_ranges = ["${module.carshub_db.db_ip_address}/32"]
+      allow_list         = [{ protocol = "tcp", ports = ["3306"] }]
     }
   ]
 }
@@ -155,7 +138,8 @@ module "carshub_cloud_run_service_account" {
   permissions = [
     "roles/secretmanager.secretAccessor",
     "roles/storage.objectAdmin",
-    "roles/iam.serviceAccountTokenCreator"
+    "roles/iam.serviceAccountTokenCreator",
+    "roles/cloudsql.client"
   ]
 }
 
@@ -382,7 +366,7 @@ module "carshub_db" {
   db_user                     = module.carshub_sql_username_secret.secret_data
   db_version                  = "MYSQL_8_0"
   location                    = var.location
-  tier                        = "db-custom-2-8192"
+  tier                        = "db-f1-micro" # db-custom-2-8192
   availability_type           = "REGIONAL"
   disk_size                   = 10 # GB
   disk_type                   = "PD_SSD"
@@ -582,7 +566,7 @@ module "carshub_backend_service" {
               secret_key_ref = [
                 {
                   secret  = module.carshub_sql_username_secret.secret_id
-                  version = "1"
+                  version = "latest"
                 }
               ]
             }
@@ -596,7 +580,7 @@ module "carshub_backend_service" {
               secret_key_ref = [
                 {
                   secret  = module.carshub_sql_password_secret.secret_id
-                  version = "1"
+                  version = "latest"
                 }
               ]
             }
@@ -612,7 +596,7 @@ module "carshub_backend_service" {
 # Cloud Function Configuration
 # -----------------------------------------------------------------------------------------
 module "carshub_media_update_function" {
-  source               = "../../../modules/cloud-run-function"
+  source               = "../../../modules/cloud-run-function/event-function"
   function_name        = "carshub-media-function-${var.environment}"
   function_description = "A function to update media details in SQL database after the upload trigger"
   location             = var.location
@@ -625,12 +609,6 @@ module "carshub_media_update_function" {
       bucket = module.carshub_media_bucket_code.bucket_name
       object = module.carshub_media_bucket_code.bucket_objects["carshub_media_function_code.zip"].name
     }
-    build_environment_variables = {
-      DB_USER     = module.carshub_db.db_user
-      DB_NAME     = module.carshub_db.db_name
-      SECRET_NAME = module.carshub_sql_password_secret.name
-      DB_PATH     = module.carshub_db.db_ip_address
-    }
   }
 
   service_config = {
@@ -639,10 +617,16 @@ module "carshub_media_update_function" {
     available_memory                 = "256M"
     timeout_seconds                  = 60
     max_instance_request_concurrency = 80
-    available_cpu                    = "1" # <-- Changed from "4" to "1"
-    ingress_settings                 = "ALLOW_INTERNAL_ONLY"
-    all_traffic_on_latest_revision   = true
-    service_account_email            = module.carshub_function_app_service_account.sa_email
+    service_environment_variables = {
+      DB_USER     = module.carshub_db.db_user
+      DB_NAME     = module.carshub_db.db_name
+      SECRET_NAME = module.carshub_sql_password_secret.name
+      DB_PATH     = module.carshub_db.db_ip_address
+    }
+    available_cpu                  = "1" # <-- Changed from "4" to "1"
+    ingress_settings               = "ALLOW_INTERNAL_ONLY"
+    all_traffic_on_latest_revision = true
+    service_account_email          = module.carshub_function_app_service_account.sa_email
     # vpc_connector                    = module.carshub_vpc_connectors.vpc_connectors[0].id
     # vpc_connector_egress_settings = "PRIVATE_RANGES_ONLY"
 
@@ -670,7 +654,7 @@ module "carshub_media_update_function" {
 # Network endpoint groups Configuration
 # -----------------------------------------------------------------------------------------
 module "carshub_frontend_service_neg" {
-  source   = "../../../modules/network_endpoint_groups"
+  source   = "../../../modules/network_endpoint_groups/serverless_neg"
   type     = "REGIONAL"
   neg_name = "carshub-frontend-service-neg-${var.environment}"
   neg_type = "SERVERLESS"
@@ -681,7 +665,7 @@ module "carshub_frontend_service_neg" {
 }
 
 module "carshub_backend_service_neg" {
-  source   = "../../../modules/network_endpoint_groups"
+  source   = "../../../modules/network_endpoint_groups/serverless_neg"
   type     = "REGIONAL"
   neg_name = "carshub-backend-service-neg-${var.environment}"
   neg_type = "SERVERLESS"
@@ -951,18 +935,17 @@ module "application_errors" {
 
 # Cloud Function errors (log-based)
 module "function_errors" {
-  source       = "../../../modules/observability/metrics"
-  name         = "function_errors"
-  filter       = <<-EOT
-    resource.type="cloud_function"
+  source           = "../../../modules/observability/metrics"
+  name             = "function_errors"
+  filter           = <<-EOT
+    resource.type="cloud_run_revision"
+    resource.labels.service_name="carshub-media-function-${var.environment}"
     severity="ERROR"
   EOT
-  metric_kind  = "DELTA"
-  value_type   = "INT64"
-  display_name = "Cloud Function Errors"
-  label_extractors = {
-    "function_name" = "EXTRACT(resource.labels.function_name)"
-  }
+  metric_kind      = "DELTA"
+  value_type       = "INT64"
+  display_name     = "Cloud Function Errors"
+  label_extractors = {}
 }
 
 # LB request count (log-based)
@@ -1296,21 +1279,19 @@ module "function_error_rate_alert" {
   display_name          = "Cloud Function High Error Rate"
   combiner              = "OR"
   notification_channels = [google_monitoring_notification_channel.email_alerts.id]
-  conditions = [
-    {
-      display_name    = "Function Error Rate > 5/min"
-      filter          = "metric.type=\"logging.googleapis.com/user/function_errors\" AND resource.type=\"cloud_function\""
-      duration        = "300s"
-      comparison      = "COMPARISON_GT"
-      threshold_value = 5
-      aggregations = {
-        alignment_period     = "60s"
-        per_series_aligner   = "ALIGN_RATE"
-        cross_series_reducer = "REDUCE_SUM"
-        group_by_fields      = ["resource.labels.function_name"]
-      }
+  conditions = [{
+    display_name    = "Function Error Rate > 5/min"
+    filter          = "metric.type=\"logging.googleapis.com/user/function_errors\" AND resource.type=\"cloud_run_revision\""
+    duration        = "300s"
+    comparison      = "COMPARISON_GT"
+    threshold_value = 5
+    aggregations = {
+      alignment_period     = "60s"
+      per_series_aligner   = "ALIGN_RATE"
+      cross_series_reducer = "REDUCE_SUM"
+      group_by_fields      = ["resource.labels.service_name"]
     }
-  ]
+  }]
   depends_on = [module.function_errors]
 }
 
@@ -1321,22 +1302,19 @@ module "function_execution_time_alert" {
   combiner              = "OR"
   notification_channels = [google_monitoring_notification_channel.email_alerts.id]
 
-  conditions = [
-    {
-      display_name    = "P95 Execution Time > 30 seconds"
-      filter          = "resource.type=\"cloud_function\" AND metric.type=\"cloudfunctions.googleapis.com/function/execution_times\""
-      duration        = "300s"
-      comparison      = "COMPARISON_GT"
-      threshold_value = 30000
-
-      aggregations = {
-        alignment_period     = "60s"
-        per_series_aligner   = "ALIGN_PERCENTILE_95"
-        cross_series_reducer = "REDUCE_MEAN"
-        group_by_fields      = ["resource.labels.function_name"]
-      }
+  conditions = [{
+    display_name    = "P95 Function Latency > 30 seconds"
+    filter          = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"carshub-media-function-${var.environment}\" AND metric.type=\"run.googleapis.com/request_latencies\""
+    duration        = "300s"
+    comparison      = "COMPARISON_GT"
+    threshold_value = 30000
+    aggregations = {
+      alignment_period     = "60s"
+      per_series_aligner   = "ALIGN_PERCENTILE_95"
+      cross_series_reducer = "REDUCE_MEAN"
+      group_by_fields      = ["resource.labels.service_name"]
     }
-  ]
+  }]
 }
 
 # Application error spike (alert on log-based metric)

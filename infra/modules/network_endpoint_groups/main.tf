@@ -15,7 +15,6 @@ resource "google_compute_network_endpoint_group" "neg" {
   subnetwork            = var.subnetwork
   default_port          = var.default_port
   zone                  = var.zone
-
 }
 
 resource "google_compute_region_network_endpoint_group" "neg" {
@@ -49,7 +48,7 @@ resource "google_compute_region_network_endpoint_group" "neg" {
     content {
       service  = app_engine.value.service
       version  = app_engine.value.version
-      url_mask = cloud_function.value.url_mask
+      url_mask = app_engine.value.url_mask
     }
   }
 
