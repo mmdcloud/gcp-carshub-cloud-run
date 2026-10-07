@@ -1,93 +1,44 @@
-variable "type" {
-  description = "Type of the regional network endpoint group."
+variable "project_id" {
   type        = string
-}
-
-variable "default_port" {
-  description = "Default port of the regional network endpoint group."
-  type        = string
-  default     = null
-}
-
-variable "zone" {
-  description = "Zone of the regional network endpoint group."
-  type        = string
-  default     = null
+  description = "The ID of the GCP project where the Internet NEG will be created."
 }
 
 variable "neg_name" {
-  description = "Name of the regional network endpoint group."
   type        = string
+  description = "The name of the Internet Network Endpoint Group."
 }
 
 variable "description" {
-  description = "Description of the network endpoint group."
-  type        = string
-  default     = ""
-}
-
-variable "neg_type" {
-  description = "Type of network endpoint group. One of: SERVERLESS, PRIVATE_SERVICE_CONNECT, INTERNET_IP_PORT, INTERNET_FQDN_PORT, NON_GCP_PRIVATE_IP_PORT."
-  type        = string
-  
-}
-
-variable "location" {
-  description = "Region in which to create the network endpoint group."
-  type        = string
-}
-
-variable "network" {
-  description = "Self link of the VPC network to which the NEG belongs. Required for PSC NEGs, optional for most serverless NEGs."
   type        = string
   default     = null
+  description = "An optional description of this NEG."
 }
 
-variable "subnetwork" {
-  description = "Self link of the subnetwork to which the NEG belongs. Required for PSC NEGs."
+variable "is_global" {
+  type        = bool
+  default     = true
+  description = "Set to true to create a Global Internet NEG. Set to false to create a Regional Internet NEG."
+}
+
+variable "region" {
   type        = string
   default     = null
+  description = "The target GCP region. Required only if is_global is set to false (Regional NEG)."
 }
 
-variable "cloud_run" {
-  description = "Cloud Run service to target. Only one of cloud_run, cloud_function, app_engine, or psc_data should be set."
-  type = object({
-    service  = optional(string)
-    tag      = optional(string)
-    url_mask = optional(string)
-  })
-  default = null
-}
+variable "endpoints" {
+  type = list(object({
+    fqdn       = optional(string)
+    ip_address = optional(string)
+    port       = optional(number)
+  }))
+  default     = []
+  description = "List of public internet endpoints (FQDN or IP, and Port) to register with the NEG."
 
-variable "cloud_function" {
-  description = "Cloud Function to target. Only one of cloud_run, cloud_function, app_engine, or psc_data should be set."
-  type = object({
-    function = optional(string)
-    url_mask = optional(string)
-  })
-  default = null
-}
-
-variable "app_engine" {
-  description = "App Engine service to target. Only one of cloud_run, cloud_function, app_engine, or psc_data should be set."
-  type = object({
-    service  = optional(string)
-    version  = optional(string)
-    url_mask = optional(string)
-  })
-  default = null
-}
-
-variable "psc_data" {
-  description = "Private Service Connect data, used when neg_type is PRIVATE_SERVICE_CONNECT."
-  type = object({
-    producer_port = optional(number)
-  })
-  default = null
-}
-
-variable "psc_target_service" {
-  description = "Target service for Private Service Connect NEGs, e.g. the PSC service attachment URI."
-  type        = string
-  default     = null
+  validation {
+    condition = alltrue([
+      for e in var.endpoints : (e.fqdn != null && e.ip_address == null) || (e.fqdn == null && e.ip_address != null)
+    ])
+    error_message = "CRITICAL ERROR: Each endpoint must define either an 'fqdn' or an 'ip_address', but not both."
+  }
 }

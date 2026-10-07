@@ -109,8 +109,8 @@ module "carshub_function_app_service_account" {
     "roles/eventarc.eventReceiver",
     "roles/cloudsql.client",
     "roles/artifactregistry.reader",
-    "roles/secretmanager.secretAccessor",
-    "roles/pubsub.publisher"
+    # "roles/secretmanager.secretAccessor",
+    # "roles/pubsub.publisher"
   ]
 }
 
@@ -123,8 +123,8 @@ module "carshub_cloudbuild_service_account" {
   permissions = [
     "roles/run.developer",
     "roles/logging.logWriter",
-    "roles/iam.serviceAccountUser",
-    "roles/artifactregistry.reader",
+    # "roles/iam.serviceAccountUser",
+    # "roles/artifactregistry.reader",
     "roles/artifactregistry.writer"
   ]
 }
@@ -136,9 +136,9 @@ module "carshub_cloud_run_service_account" {
   project_id    = data.google_project.project.project_id
   member_prefix = "serviceAccount"
   permissions = [
-    "roles/secretmanager.secretAccessor",
-    "roles/storage.objectAdmin",
-    "roles/iam.serviceAccountTokenCreator",
+    # "roles/secretmanager.secretAccessor",
+    # "roles/storage.objectAdmin",
+    # "roles/iam.serviceAccountTokenCreator",
     "roles/cloudsql.client"
   ]
 }
@@ -170,19 +170,6 @@ module "carshub_frontend_artifact_registry" {
   depends_on    = [module.carshub_apis]
 }
 
-# resource "null_resource" "build_and_push_frontend" {
-#   triggers = {
-#     always_run = timestamp()
-#   }
-#   provisioner "local-exec" {
-#     command = "bash ${path.cwd}/../../../../src/frontend/artifact_push.sh http://${module.carshub_backend_service_lb.lb_ip_address} ${module.carshub_cdn.lb_ip_address} ${data.google_project.project.project_id} ${var.environment}"
-#   }
-
-#   depends_on = [
-#     module.carshub_frontend_artifact_registry
-#   ]
-# }
-
 module "carshub_backend_artifact_registry" {
   source        = "../../../modules/artifact-registry"
   project_id    = var.project_id
@@ -192,19 +179,6 @@ module "carshub_backend_artifact_registry" {
   repository_id = "carshub-backend-${var.environment}"
   depends_on    = [module.carshub_db, module.carshub_apis]
 }
-
-# resource "null_resource" "build_and_push_backend" {
-#   triggers = {
-#     always_run = timestamp()
-#   }
-#   provisioner "local-exec" {
-#     command = "bash ${path.cwd}/../../../../src/backend/api/artifact_push.sh ${data.google_project.project.project_id} ${var.environment}"
-#   }
-
-#   depends_on = [
-#     module.carshub_backend_artifact_registry
-#   ]
-# }
 
 # -----------------------------------------------------------------------------------------
 # Google Cloud Storage (GCS) Configuration
@@ -261,7 +235,7 @@ module "carshub_media_bucket" {
       topic_id       = module.carshub_media_bucket_pubsub.topic_id
     }
   ]
-  force_destroy               = true
+  force_destroy               = true # false for production
   uniform_bucket_level_access = true
   depends_on = [
     google_pubsub_topic_iam_binding.binding
@@ -281,7 +255,7 @@ module "carshub_media_bucket_code" {
       content     = ""
     }
   ]
-  force_destroy               = true
+  force_destroy               = true # false for production
   uniform_bucket_level_access = true
 }
 
@@ -303,13 +277,28 @@ module "carshub_media_bucket_code" {
 #   member = "serviceAccount:${module.carshub_cloud_run_service_account.sa_email}"
 # }
 
-resource "google_storage_bucket_iam_binding" "storage_iam_binding" {
+# resource "google_storage_bucket_iam_binding" "storage_iam_binding" {
+#   bucket = module.carshub_media_bucket.bucket_name
+#   role   = "roles/storage.objectViewer"
+
+#   members = [
+#     "allUsers"
+#   ]
+# }
+
+resource "google_storage_bucket_iam_member" "backend_access" {
+  bucket = module.carshub_media_bucket.bucket_name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${module.carshub_cloud_run_service_account.sa_email}"
+}
+
+# CDN reads from the private bucket
+resource "google_storage_bucket_iam_member" "cdn_sa_access" {
   bucket = module.carshub_media_bucket.bucket_name
   role   = "roles/storage.objectViewer"
+  member = "serviceAccount:service-${data.google_project.project.number}@cloud-cdn-fill.iam.gserviceaccount.com"
 
-  members = [
-    "allUsers"
-  ]
+  depends_on = [module.carshub_cdn]
 }
 
 # -----------------------------------------------------------------------------------------
@@ -328,9 +317,9 @@ module "carshub_cdn" {
     }
   }
 
-  enable_ssl              = false
+  enable_ssl              = true
   enable_http             = true
-  managed_ssl_certificate = false
+  managed_ssl_certificate = true
   enable_cloud_armor      = false
   depends_on              = [module.carshub_media_bucket]
 }
@@ -341,7 +330,7 @@ module "carshub_cdn" {
 module "carshub_sql_password_secret" {
   source              = "../../../modules/secret-manager"
   is_regional         = false
-  deletion_protection = false
+  deletion_protection = false # true for production
   secret_data         = tostring(data.vault_generic_secret.sql.data["password"])
   secret_id           = "carshub-db-password-secret-${var.environment}"
   depends_on          = [module.carshub_apis]
@@ -350,10 +339,36 @@ module "carshub_sql_password_secret" {
 module "carshub_sql_username_secret" {
   source              = "../../../modules/secret-manager"
   is_regional         = false
-  deletion_protection = false
+  deletion_protection = false # true for production
   secret_data         = tostring(data.vault_generic_secret.sql.data["username"])
   secret_id           = "carshub-db-username-secret-${var.environment}"
   depends_on          = [module.carshub_apis]
+}
+
+# Secrets: per-secret access instead of project-wide
+resource "google_secret_manager_secret_iam_member" "run_sa_password" {
+  secret_id = module.carshub_sql_password_secret.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${module.carshub_cloud_run_service_account.sa_email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "run_sa_username" {
+  secret_id = module.carshub_sql_username_secret.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${module.carshub_cloud_run_service_account.sa_email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "function_sa_password" {
+  secret_id = module.carshub_sql_password_secret.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${module.carshub_function_app_service_account.sa_email}"
+}
+
+# Cloud Build may only act as the Cloud Run SA, not any SA in the project
+resource "google_service_account_iam_member" "cloudbuild_act_as_run_sa" {
+  service_account_id = "projects/${var.project_id}/serviceAccounts/${module.carshub_cloud_run_service_account.sa_email}"
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${module.carshub_cloudbuild_service_account.sa_email}"
 }
 
 # -----------------------------------------------------------------------------------------
@@ -367,7 +382,7 @@ module "carshub_db" {
   db_version                  = "MYSQL_8_0"
   location                    = var.location
   tier                        = "db-f1-micro" # db-custom-2-8192
-  availability_type           = "REGIONAL"
+  availability_type           = "ZONAL"
   disk_size                   = 10 # GB
   disk_type                   = "PD_SSD"
   disk_autoresize             = true
@@ -399,10 +414,6 @@ module "carshub_db" {
     {
       name  = "log_queries_not_using_indexes"
       value = "on"
-    },
-    {
-      name  = "max_connections"
-      value = "1000"
     },
     {
       name  = "skip_show_database"
@@ -484,10 +495,11 @@ module "carshub_frontend_service" {
       volume_mounts     = []
       cpu_idle          = true
       startup_cpu_boost = true
-      image             = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-frontend-${var.environment}/carshub-frontend:latest"
+      image             = var.frontend_image
+      # "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-frontend-${var.environment}/carshub-frontend:latest"
     }
   ]
-  depends_on = [null_resource.build_and_push_frontend, module.carshub_apis, module.carshub_cloud_run_service_account]
+  depends_on = [module.carshub_frontend_artifact_registry, module.carshub_apis, module.carshub_cloud_run_service_account]
 }
 
 module "carshub_backend_service" {
@@ -495,7 +507,7 @@ module "carshub_backend_service" {
   project_id                       = var.project_id
   type                             = "SERVICE"
   name                             = "carshub-backend-service-${var.environment}"
-  deletion_protection              = false
+  deletion_protection              = false # true for production
   ingress                          = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
   service_account                  = module.carshub_cloud_run_service_account.sa_email
   location                         = var.location
@@ -532,7 +544,8 @@ module "carshub_backend_service" {
 
   containers = [
     {
-      image             = "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-backend-${var.environment}/carshub-backend:latest"
+      image = var.backend_image
+      # "${var.location}-docker.pkg.dev/${data.google_project.project.project_id}/carshub-backend-${var.environment}/carshub-backend:latest"
       cpu_idle          = true
       startup_cpu_boost = true
       volume_mounts = [
@@ -589,7 +602,7 @@ module "carshub_backend_service" {
       ]
     }
   ]
-  depends_on = [module.carshub_apis, module.carshub_sql_password_secret, null_resource.build_and_push_backend, module.carshub_cloud_run_service_account]
+  depends_on = [module.carshub_apis, module.carshub_sql_password_secret, module.carshub_backend_artifact_registry, module.carshub_cloud_run_service_account]
 }
 
 # -----------------------------------------------------------------------------------------
@@ -654,22 +667,22 @@ module "carshub_media_update_function" {
 # Network endpoint groups Configuration
 # -----------------------------------------------------------------------------------------
 module "carshub_frontend_service_neg" {
-  source   = "../../../modules/network_endpoint_groups/serverless_neg"
-  type     = "REGIONAL"
-  neg_name = "carshub-frontend-service-neg-${var.environment}"
-  neg_type = "SERVERLESS"
-  location = var.location
+  source     = "../../../modules/network_endpoint_groups/serverless_neg"
+  project_id = var.project_id
+  region     = var.location
+  neg_name   = "carshub-frontend-service-neg-${var.environment}"
+
   cloud_run = {
     service = module.carshub_frontend_service.service_name
   }
 }
 
 module "carshub_backend_service_neg" {
-  source   = "../../../modules/network_endpoint_groups/serverless_neg"
-  type     = "REGIONAL"
-  neg_name = "carshub-backend-service-neg-${var.environment}"
-  neg_type = "SERVERLESS"
-  location = var.location
+  source     = "../../../modules/network_endpoint_groups/serverless_neg"
+  project_id = var.project_id
+  region     = var.location
+  neg_name   = "carshub-backend-service-neg-${var.environment}"
+
   cloud_run = {
     service = module.carshub_backend_service.service_name
   }
@@ -698,9 +711,9 @@ module "carshub_frontend_service_lb" {
       ]
     }
   }
-  enable_ssl              = false
+  enable_ssl              = true
   enable_http             = true
-  managed_ssl_certificate = false
+  managed_ssl_certificate = true
   enable_cloud_armor      = false
   depends_on              = [module.carshub_frontend_service]
 }
@@ -726,9 +739,9 @@ module "carshub_backend_service_lb" {
     }
   }
 
-  enable_ssl              = false
+  enable_ssl              = true
   enable_http             = true
-  managed_ssl_certificate = false
+  managed_ssl_certificate = true
   enable_cloud_armor      = false
   depends_on              = [module.carshub_backend_service]
 }
@@ -890,8 +903,7 @@ module "database_slow_queries" {
   name         = "database_slow_queries"
   filter       = <<-EOT
     resource.type="cloudsql_database"
-    severity>="WARNING"
-    textPayload:"Query_time"
+    logName:"cloudsql.googleapis.com%2Fmysql-slow.log"
   EOT
   metric_kind  = "DELTA"
   value_type   = "INT64"
@@ -1189,19 +1201,19 @@ module "http_4xx_rate_alert" {
   display_name          = "High 4xx Error Rate"
   combiner              = "OR"
   notification_channels = [google_monitoring_notification_channel.email_alerts.id]
-  conditions = [
-    {
-      display_name    = "4xx Error Rate > 50/min"
-      filter          = "metric.type=\"logging.googleapis.com/user/http_4xx_errors\" AND resource.type=\"l7_lb_rule\""
-      duration        = "300s"
-      comparison      = "COMPARISON_GT"
-      threshold_value = 50
-      aggregations = {
-        alignment_period   = "60s"
-        per_series_aligner = "ALIGN_RATE"
-      }
+  conditions = [{
+    display_name    = "4xx Error Rate > 50/min"
+    filter          = "metric.type=\"logging.googleapis.com/user/http_4xx_errors\" AND resource.type=\"http_load_balancer\""
+    duration        = "300s"
+    comparison      = "COMPARISON_GT"
+    threshold_value = 50
+    aggregations = {
+      alignment_period     = "60s"
+      per_series_aligner   = "ALIGN_DELTA"
+      cross_series_reducer = "REDUCE_SUM"
+      group_by_fields      = ["resource.labels.url_map_name"]
     }
-  ]
+  }]
   depends_on = [module.http_4xx_errors]
 }
 
@@ -1211,19 +1223,19 @@ module "high_error_rate_alert" {
   display_name          = "High Error Rate Alert"
   combiner              = "OR"
   notification_channels = [google_monitoring_notification_channel.email_alerts.id]
-  conditions = [
-    {
-      display_name    = "HTTP 5xx Error Rate > 10/min"
-      filter          = "metric.type=\"logging.googleapis.com/user/http_5xx_errors\" AND resource.type=\"l7_lb_rule\""
-      duration        = "300s"
-      comparison      = "COMPARISON_GT"
-      threshold_value = 10
-      aggregations = {
-        alignment_period   = "60s"
-        per_series_aligner = "ALIGN_RATE"
-      }
+  conditions = [{
+    display_name    = "HTTP 5xx Error Rate > 10/min"
+    filter          = "metric.type=\"logging.googleapis.com/user/http_5xx_errors\" AND resource.type=\"http_load_balancer\""
+    duration        = "300s"
+    comparison      = "COMPARISON_GT"
+    threshold_value = 10
+    aggregations = {
+      alignment_period     = "60s"
+      per_series_aligner   = "ALIGN_DELTA"
+      cross_series_reducer = "REDUCE_SUM"
+      group_by_fields      = ["resource.labels.url_map_name"]
     }
-  ]
+  }]
   depends_on = [module.http_5xx_errors]
 }
 
