@@ -81,19 +81,19 @@ module "carshub_vpc" {
 # -----------------------------------------------------------------------------------------
 # Serverless VPC Connectors
 # -----------------------------------------------------------------------------------------
-# module "carshub_vpc_connectors" {
-#   source   = "../../../modules/network/vpc-connector"
-#   vpc_name = module.carshub_vpc.vpc_name
-#   serverless_vpc_connectors = [
-#     {
-#       name          = "carshub-connector-${var.environment}"
-#       ip_cidr_range = "10.8.0.0/28"
-#       min_instances = 2
-#       max_instances = 3
-#       machine_type  = "e2-micro"
-#     }
-#   ]
-# }
+module "carshub_vpc_connectors" {
+  source   = "../../../modules/network/vpc-connector"
+  vpc_name = module.carshub_vpc.vpc_name
+  serverless_vpc_connectors = [
+    {
+      name          = "carshub-connector-${var.environment}"
+      ip_cidr_range = "10.8.0.0/28"
+      min_instances = 2
+      max_instances = 3
+      machine_type  = "e2-micro"
+    }
+  ]
+}
 
 # -----------------------------------------------------------------------------------------
 # Service Accounts
@@ -146,10 +146,10 @@ module "carshub_cloud_run_service_account" {
 # -----------------------------------------------------------------------------------------
 # Pub/Sub Configuration
 # -----------------------------------------------------------------------------------------
-resource "google_pubsub_topic_iam_binding" "binding" {
-  topic   = module.carshub_media_bucket_pubsub.topic_id
-  role    = "roles/pubsub.publisher"
-  members = ["serviceAccount:${data.google_storage_project_service_account.carshub_gcs_account.email_address}"]
+resource "google_pubsub_topic_iam_member" "binding" {
+  topic  = module.carshub_media_bucket_pubsub.topic_id
+  role   = "roles/pubsub.publisher"
+  member = "serviceAccount:${data.google_storage_project_service_account.carshub_gcs_account.email_address}"
 }
 
 module "carshub_media_bucket_pubsub" {
@@ -238,7 +238,7 @@ module "carshub_media_bucket" {
   force_destroy               = true # false for production
   uniform_bucket_level_access = true
   depends_on = [
-    google_pubsub_topic_iam_binding.binding
+    google_pubsub_topic_iam_member.binding
   ]
 }
 
@@ -317,9 +317,9 @@ module "carshub_cdn" {
     }
   }
 
-  enable_ssl              = true
+  enable_ssl              = false
   enable_http             = true
-  managed_ssl_certificate = true
+  managed_ssl_certificate = false
   enable_cloud_armor      = false
   depends_on              = [module.carshub_media_bucket]
 }
@@ -466,14 +466,14 @@ module "carshub_frontend_service" {
 
   vpc_access = {
     # vpc_connector_name = module.carshub_vpc_connectors.vpc_connectors[0].id
-    egress = "PRIVATE_RANGES_ONLY"
-
-    network_interfaces = [
-      {
-        network    = module.carshub_vpc.vpc_id
-        subnetwork = module.carshub_vpc.subnets["carshub-frontend-cloud-run-subnet-${var.environment}"].name
-      }
-    ]
+    egress             = "PRIVATE_RANGES_ONLY"
+    vpc_connector_name = module.carshub_vpc_connectors.vpc_connectors[0].id
+    # network_interfaces = [
+    #   {
+    #     network    = module.carshub_vpc.vpc_id
+    #     subnetwork = module.carshub_vpc.subnets["carshub-frontend-cloud-run-subnet-${var.environment}"].name
+    #   }
+    # ]
   }
 
   traffic = [
@@ -516,14 +516,14 @@ module "carshub_backend_service" {
   max_instance_request_concurrency = 80
 
   vpc_access = {
-    egress = "PRIVATE_RANGES_ONLY"
-
-    network_interfaces = [
-      {
-        network    = module.carshub_vpc.vpc_id
-        subnetwork = module.carshub_vpc.subnets["carshub-backend-cloud-run-subnet-${var.environment}"].name
-      }
-    ]
+    egress             = "PRIVATE_RANGES_ONLY"
+    vpc_connector_name = module.carshub_vpc_connectors.vpc_connectors[0].id
+    # network_interfaces = [
+    #   {
+    #     network    = module.carshub_vpc.vpc_id
+    #     subnetwork = module.carshub_vpc.subnets["carshub-backend-cloud-run-subnet-${var.environment}"].name
+    #   }
+    # ]
   }
 
   volumes = [
@@ -640,16 +640,16 @@ module "carshub_media_update_function" {
     ingress_settings               = "ALLOW_INTERNAL_ONLY"
     all_traffic_on_latest_revision = true
     service_account_email          = module.carshub_function_app_service_account.sa_email
-    # vpc_connector                    = module.carshub_vpc_connectors.vpc_connectors[0].id
-    # vpc_connector_egress_settings = "PRIVATE_RANGES_ONLY"
+    vpc_connector                  = module.carshub_vpc_connectors.vpc_connectors[0].id
+    vpc_connector_egress_settings  = "PRIVATE_RANGES_ONLY"
 
-    direct_vpc_egress = "VPC_EGRESS_PRIVATE_RANGES_ONLY"
-    direct_vpc_network_interface = [
-      {
-        network    = module.carshub_vpc.vpc_id
-        subnetwork = module.carshub_vpc.subnets["carshub-media-update-function-subnet-${var.environment}"].name
-      }
-    ]
+    # direct_vpc_egress = "VPC_EGRESS_PRIVATE_RANGES_ONLY"
+    # direct_vpc_network_interface = [
+    #   {
+    #     network    = module.carshub_vpc.vpc_id
+    #     subnetwork = module.carshub_vpc.subnets["carshub-media-update-function-subnet-${var.environment}"].name
+    #   }
+    # ]
   }
 
   event_trigger = {
@@ -711,9 +711,9 @@ module "carshub_frontend_service_lb" {
       ]
     }
   }
-  enable_ssl              = true
+  enable_ssl              = false
   enable_http             = true
-  managed_ssl_certificate = true
+  managed_ssl_certificate = false
   enable_cloud_armor      = false
   depends_on              = [module.carshub_frontend_service]
 }
@@ -739,9 +739,9 @@ module "carshub_backend_service_lb" {
     }
   }
 
-  enable_ssl              = true
+  enable_ssl              = false
   enable_http             = true
-  managed_ssl_certificate = true
+  managed_ssl_certificate = false
   enable_cloud_armor      = false
   depends_on              = [module.carshub_backend_service]
 }
@@ -1203,7 +1203,7 @@ module "http_4xx_rate_alert" {
   notification_channels = [google_monitoring_notification_channel.email_alerts.id]
   conditions = [{
     display_name    = "4xx Error Rate > 50/min"
-    filter          = "metric.type=\"logging.googleapis.com/user/http_4xx_errors\" AND resource.type=\"http_load_balancer\""
+    filter          = "resource.type=\"https_lb_rule\" AND metric.type=\"loadbalancing.googleapis.com/https/request_count\" AND metric.label.response_code_class=\"400\""
     duration        = "300s"
     comparison      = "COMPARISON_GT"
     threshold_value = 50
@@ -1214,7 +1214,6 @@ module "http_4xx_rate_alert" {
       group_by_fields      = ["resource.labels.url_map_name"]
     }
   }]
-  depends_on = [module.http_4xx_errors]
 }
 
 # LB — 5xx / high error rate (alert on log-based metric)
@@ -1225,7 +1224,7 @@ module "high_error_rate_alert" {
   notification_channels = [google_monitoring_notification_channel.email_alerts.id]
   conditions = [{
     display_name    = "HTTP 5xx Error Rate > 10/min"
-    filter          = "metric.type=\"logging.googleapis.com/user/http_5xx_errors\" AND resource.type=\"http_load_balancer\""
+    filter          = "resource.type=\"https_lb_rule\" AND metric.type=\"loadbalancing.googleapis.com/https/request_count\" AND metric.label.response_code_class=\"500\""
     duration        = "300s"
     comparison      = "COMPARISON_GT"
     threshold_value = 10
@@ -1236,7 +1235,6 @@ module "high_error_rate_alert" {
       group_by_fields      = ["resource.labels.url_map_name"]
     }
   }]
-  depends_on = [module.http_5xx_errors]
 }
 
 # Cloud Armor — high block rate (alert on log-based metric)
@@ -1353,3 +1351,29 @@ module "application_error_spike_alert" {
     }
   ]
 }
+
+# -----------------------------------------------------------------------------------------
+# AppHub Configuration
+# -----------------------------------------------------------------------------------------
+# resource "google_apphub_application" "carshub_app_hub" {
+#   location       = var.location
+#   application_id = "carshub-app-hub"
+
+#   scope {
+#     type = "REGIONAL"
+#   }
+# }
+
+# resource "google_apphub_service" "carshub_frontend_service" {
+#   location           = var.location
+#   application_id     = google_apphub_application.carshub_app_hub.application_id
+#   service_id         = module.carshub_frontend_service_lb.lb_ip_address
+#   discovered_service = data.google_apphub_discovered_service.catalog-service.name
+# }
+
+# resource "google_apphub_service" "carshub_backend_service" {
+#   location           = var.location
+#   application_id     = google_apphub_application.carshub_app_hub.application_id
+#   service_id         = module.carshub_backend_service_lb.lb_ip_address
+#   discovered_service = data.google_apphub_discovered_service.catalog-service.name
+# }
